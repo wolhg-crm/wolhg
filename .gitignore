@@ -18,3 +18,6 @@
 *.p12
 credentials.json
 
+
+# Local history backup from OSS cutover (never publish)
+.git.bak-pre-oss-*/
