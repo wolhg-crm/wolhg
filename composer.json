@@ -1,0 +1,22 @@
+{
+  "name": "wolhg/church-care-crm",
+  "description": "CRM for home groups PWA",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.5",
+    "ext-curl": "*",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "minishlink/web-push": "^9.0"
+  },
+  "config": {
+    "platform": {
+      "php": "8.5.0"
+    },
+    "platform-check": true
+  }
+}

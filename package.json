@@ -1,0 +1,10 @@
+{
+  "name": "wolhg",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:css": "node scripts/build-css.mjs",
+    "build:js": "node scripts/build-js.mjs",
+    "build": "npm run build:css && npm run build:js"
+  }
+}

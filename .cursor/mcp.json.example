@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "wolhg": {
+      "url": "https://your-wolhg-host/mcp"
+    }
+  }
+}

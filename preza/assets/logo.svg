@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 78 272 302" role="img" aria-label="CRM Домашних групп">
+  <path fill="#F7F4EE" d="M256 78c73 45 136 52 136 52v120c0 91-55 150-136 184-81-34-136-93-136-184V130s63-7 136-52Z"/>
+  <path fill="#FFBA0D" d="M256 118c56 32 100 40 100 40v88c0 66-38 111-100 141-62-30-100-75-100-141v-88s44-8 100-40Z"/>
+  <path fill="#1D1D1B" d="M238 142h36v56h54v36h-54v56h-36v-56h-54v-36h54v-56Z"/>
+  <path fill="#E95E18" d="M256 247c22-31 68-17 68 21 0 34-42 59-68 82-26-23-68-48-68-82 0-38 46-52 68-21Z"/>
+  <path fill="none" stroke="#00A492" stroke-width="20" stroke-linecap="round" d="M174 306c34 29 58 45 82 56 24-11 48-27 82-56"/>
+  <circle cx="174" cy="306" r="20" fill="#00A492"/>
+  <circle cx="338" cy="306" r="20" fill="#00A492"/>
+  <circle cx="256" cy="362" r="18" fill="#00A492"/>
+</svg>

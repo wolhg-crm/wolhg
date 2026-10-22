@@ -1,0 +1,33 @@
+Options -Indexes
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Avoid mixed Secure/non-Secure PHPSESSID cookies that break login/CSRF.
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    RewriteRule ^(?:config|src|database|bin|tests|vendor|docs|scripts)(?:/|$) - [F,L]
+    RewriteRule ^(?:Dockerfile|docker-compose\.yml|composer\.(?:json|lock)|Makefile|apache\.conf|docker-entrypoint\.sh|README\.md)$ - [F,L]
+    RewriteRule ^(?:\.env|\.gitignore|\.deploy-revision|\.gitlab-ci\.yml|.*\.log)$ - [F,L]
+    RewriteRule ^\.deploy-staging(?:/|$) - [F,L]
+
+    # Public presentation deck (static folder at project root).
+    RewriteRule ^preza/?$ preza/index.html [L]
+    RewriteRule ^preza/(.*)$ preza/$1 [L]
+
+    RewriteRule ^(assets/.*|uploads/.*|service-worker\.js)$ public/$1 [L]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ public/index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+</IfModule>

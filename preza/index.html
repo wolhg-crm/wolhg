@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Презентация платформы CRM Домашние группы для пасторов: забота о людях, домашние группы, мобильное приложение.">
+  <meta name="theme-color" content="#e95e18">
+  <title>CRM Домашние группы — презентация для пасторов</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/montserrat-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/montserrat-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/montserrat-800.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/preza.css">
+</head>
+<body tabindex="-1">
+  <header class="deck-chrome">
+    <a class="deck-brand" href="https://wolhg.ru/" aria-label="CRM Домашние группы">
+      <img src="assets/logo.svg" alt="" width="120" height="22" decoding="async">
+      <span>CRM Домашние группы</span>
+    </a>
+    <div class="deck-actions">
+      <button type="button" class="deck-btn deck-btn--label-hide" data-deck-print title="Печать или сохранить как PDF">Печать / PDF</button>
+      <a class="deck-btn deck-btn--primary" href="/demo/enter">Открыть демо</a>
+    </div>
+  </header>
+
+  <main class="deck" aria-label="Презентация">
+    <p class="deck-progress" data-deck-live aria-live="polite">Слайд 1</p>
+
+    <!-- 1. Title -->
+    <section class="slide is-active" data-slide data-section="title" aria-hidden="false">
+      <div class="slide__inner hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Платформа для церквей</p>
+          <h1>CRM Домашние группы</h1>
+          <p class="lead">Сервис заботы о людях в домашних группах — для пасторов, которые хотят видеть церковь ясно и вовремя приходить на помощь.</p>
+        </div>
+        <figure class="hero-media">
+          <img src="assets/img/hero-homegroup.jpg" alt="Домашняя группа за общим столом в тёплой атмосфере общения" width="1280" height="800" decoding="async" fetchpriority="high">
+        </figure>
+      </div>
+    </section>
+
+    <!-- 2. Why -->
+    <section class="slide" data-slide data-section="why" hidden aria-hidden="true">
+      <div class="slide__inner split">
+        <div>
+          <p class="eyebrow">Зачем</p>
+          <h2>Одна картина заботы вместо разрозненных чатов</h2>
+          <p class="lead">Когда данные о людях живут в таблицах, переписках и памяти лидеров, новички теряются, а риски замечают слишком поздно. Платформа собирает посещаемость, контакты и задачи в одном контуре с понятными зонами ответственности.</p>
+        </div>
+        <div class="scheme" aria-label="Зоны видимости по ролям">
+          <div class="scheme__row">
+            <span class="scheme__level">Лидер ДГ</span>
+            <p class="scheme__text">Своя домашняя группа: встречи, люди, радар заботы, задачи.</p>
+          </div>
+          <div class="scheme__row">
+            <span class="scheme__level">Окружной</span>
+            <p class="scheme__text">Назначенные округа города: проблемные группы, заявки, структура.</p>
+          </div>
+          <div class="scheme__row">
+            <span class="scheme__level">Пастор</span>
+            <p class="scheme__text">Вся церковь: аналитика, эскалации «нужна помощь», сводки рисков.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Pastor -->
+    <section class="slide" data-slide data-section="pastor" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Пастору</p>
+          <h2>Видимость церкви и своевременная помощь</h2>
+          <ul class="bullets">
+            <li>Дашборд и радар заботы по всей церкви</li>
+            <li>Аналитика за квартал и год: группы, новички, крещения</li>
+            <li>Экран округов: группы с низкой активностью и просьбы о помощи</li>
+            <li>Очередь заявок участников и назначение лидеров</li>
+            <li>Ежедневная сводка рисков в Max и VK для пастора и администратора</li>
+            <li>Карта роста: церковь → округа → группы → ученики и будущие лидеры</li>
+          </ul>
+        </div>
+        <div>
+          <figure class="screen-frame" data-screen="dashboard">
+            <img src="assets/screens/dashboard.png" alt="Скриншот дашборда пастора с метриками и радаром заботы" width="1280" height="800" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. District -->
+    <section class="slide" data-slide data-section="district" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Окружному лидеру</p>
+          <h2>Округ под контролем без микроменеджмента каждой группы</h2>
+          <ul class="bullets">
+            <li>Видимость по назначенным округам (если округа ещё не настроены — по церкви)</li>
+            <li>Экран окружного: проблемные группы поднимаются вверх</li>
+            <li>Создание домашних групп и назначение лидеров</li>
+            <li>Обработка заявок новых участников с учётом района и вместимости</li>
+            <li>Округа города: полигоны на карте и автопривязка групп по координатам</li>
+          </ul>
+        </div>
+        <figure class="screen-frame" data-screen="regional">
+          <img src="assets/screens/regional.png" alt="Скриншот экрана окружного лидера со списком групп" width="1280" height="800" loading="lazy" decoding="async">
+        </figure>
+      </div>
+    </section>
+
+    <!-- 5. Leader -->
+    <section class="slide" data-slide data-section="leader" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Лидеру домашней группы</p>
+          <h2>Инструменты заботы на встрече и между встречами</h2>
+          <ul class="bullets">
+            <li>Радар заботы и автоматические задачи (новичок 2 / 7 / 30 дней, «выпадает из общения»)</li>
+            <li>Встреча: посещаемость, атмосфера, заметки, запрос помощи пастора</li>
+            <li>Карточка человека: контакты, история общения, молитвы, путь веры</li>
+            <li>Max и VK-бот: быстрые действия, отчёт после встречи, молитва, заявка новичка</li>
+            <li>Установка на телефон как приложение (PWA) и обучающие материалы</li>
+          </ul>
+        </div>
+        <figure class="screen-frame" data-screen="meeting">
+          <img src="assets/screens/meeting.png" alt="Скриншот экрана встречи с отметкой посещаемости" width="1280" height="800" loading="lazy" decoding="async">
+        </figure>
+      </div>
+    </section>
+
+    <!-- 6. Guests -->
+    <section class="slide" data-slide data-section="guest" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Гостям</p>
+          <h2>Понятный вход в домашнюю группу без барьеров</h2>
+          <ul class="bullets">
+            <li>Публичная карта и каталог домашних групп</li>
+            <li>Лендинг церкви: расписание, контакты, соцсети</li>
+            <li>Заявка в очередь на вступление — не сразу в группу, решение за служителями</li>
+            <li>Публичная молитвенная нужда — с именем или анонимно</li>
+            <li>Публичное свидетельство о чуде Господа</li>
+            <li>Подбор группы по району и геопозиции в заявке и через ботов</li>
+          </ul>
+        </div>
+        <div class="screen-solo" aria-label="Публичный каталог домашних групп">
+          <figure class="screen-frame screen-frame--autoscroll" data-screen="homegroup">
+            <div class="screen-autoscroll__track">
+              <img src="assets/screens/homegroup.png" alt="Скриншот публичного каталога домашних групп целиком" width="900" height="2116" loading="lazy" decoding="async">
+            </div>
+          </figure>
+          <p class="screen-caption">Карта и каталог домашних групп</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Church landing -->
+    <section class="slide" data-slide data-section="landing" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Публичная страница</p>
+          <h2>Своя страница церкви для гостей</h2>
+          <p class="lead">У каждой церкви — своя страница: контакты, расписание, пасторы, соцсети и быстрые действия. Всё редактируется в системе, без отдельного сайта.</p>
+          <ul class="bullets">
+            <li>Адрес с картой и подсказкой «как добраться»</li>
+            <li>Расписание, служения и блок пасторов с фото</li>
+            <li>Кнопки: домашние группы, молитва, свидетельство, соцсети</li>
+            <li>Ссылка на пожертвования</li>
+            <li>Редактируется в настройках церкви</li>
+          </ul>
+        </div>
+        <div class="screen-solo" aria-label="Лендинг церкви Королёв">
+          <figure class="screen-frame screen-frame--autoscroll" data-screen="landing-korolev">
+            <div class="screen-autoscroll__track">
+              <img src="assets/screens/landing-korolev.png" alt="Скриншот лендинга церкви Слово Жизни Королёв целиком" width="900" height="3231" loading="lazy" decoding="async">
+            </div>
+          </figure>
+          <p class="screen-caption">Слово Жизни Королёв</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. PWA -->
+    <section class="slide" data-slide data-section="pwa" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">На телефоне</p>
+          <h2>Сайт становится приложением</h2>
+          <p class="lead">CRM Домашние группы можно добавить на домашний экран телефона — как обычное приложение. Отдельная установка из магазина не нужна: открыли сайт, нажали «Установить» — и иконка уже рядом с другими программами.</p>
+          <ul class="bullets">
+            <li>Лидер открывает заботу о людях одним касанием</li>
+            <li>Удобно отметить встречу и перезвонить прямо с телефона</li>
+            <li>Работает на привычном телефоне — Android и iPhone</li>
+            <li>Всегда актуальная версия: ничего не нужно обновлять вручную</li>
+          </ul>
+        </div>
+        <div class="pwa-flow" aria-label="Три простых шага">
+          <div class="pwa-flow__card">
+            <strong>1. Открыть сайт</strong>
+            <span>Зайти в CRM с телефона через браузер — как в любой другой день.</span>
+          </div>
+          <div class="pwa-flow__card">
+            <strong>2. Добавить на экран</strong>
+            <span>Система предложит установить приложение. Появится своя иконка.</span>
+          </div>
+          <div class="pwa-flow__card">
+            <strong>3. Пользоваться</strong>
+            <span>Дальше — как с обычным приложением: встречи, люди, напоминания о заботе.</span>
+          </div>
+          <figure class="screen-frame" data-screen="pwa" style="grid-column:1/-1">
+            <img src="assets/screens/pwa.png" alt="Экран установки приложения CRM на телефон" width="1280" height="800" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8b. Training -->
+    <section class="slide" data-slide data-section="training" hidden aria-hidden="true">
+      <div class="slide__inner split split--top">
+        <div>
+          <p class="eyebrow">Обучение</p>
+          <h2>Обучение внутри платформы — и по группам, и по системе</h2>
+          <p class="lead">Лидеру не нужно искать материалы снаружи: в CRM уже есть курс по домашним группам и понятная инструкция, как пользоваться сервисом.</p>
+          <ul class="bullets">
+            <li>Курс «Лидер домашней группы»: видение, структура встречи, характер и душепопечение</li>
+            <li>Инструкция «Как пользоваться системой»: радар, встречи, карточки, роли</li>
+            <li>База знаний: FAQ, ледоколы, шаблоны сообщений и отчётов</li>
+            <li>Церковь может дополнять материалы под свою практику</li>
+          </ul>
+        </div>
+        <figure class="screen-frame" data-screen="knowledge">
+          <img src="assets/screens/knowledge.png" alt="Скриншот раздела обучения и базы знаний" width="1440" height="900" loading="lazy" decoding="async">
+        </figure>
+      </div>
+    </section>
+
+    <!-- 8. Change -->
+    <section class="slide" data-slide data-section="change" hidden aria-hidden="true">
+      <div class="slide__inner">
+        <div>
+          <p class="eyebrow">Что изменится</p>
+          <h2>От разрозненных сигналов к управляемой заботе</h2>
+        </div>
+        <div class="table-wrap" role="region" aria-label="Сравнение до и после внедрения" tabindex="0">
+          <table class="data">
+            <thead>
+              <tr>
+                <th scope="col">До внедрения</th>
+                <th scope="col">После внедрения</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Кто давно не был — известно из памяти и чатов</td>
+                <td><strong>Радар заботы</strong> с цветовым статусом по посещению и контакту</td>
+              </tr>
+              <tr>
+                <td>Новичок легко «выпадает» после первого визита</td>
+                <td>Автозадачи лидеру на 2, 7 и 30 день после первого посещения</td>
+              </tr>
+              <tr>
+                <td>Отчёты после встреч в разных форматах</td>
+                <td>Единый контур посещаемости, карточек и короткого отчёта</td>
+              </tr>
+              <tr>
+                <td>Гостю сложно найти подходящую группу</td>
+                <td>Публичная карта, заявка в очередь, подбор по району и гео</td>
+              </tr>
+              <tr>
+                <td>Пастор узнаёт о кризисе с опозданием</td>
+                <td>Эскалация «нужна помощь» и ежедневная сводка рисков (Max/VK)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="radar" aria-label="Легенда радара заботы">
+          <div class="radar__item">
+            <span class="radar__dot radar__dot--green" aria-hidden="true"></span>
+            <div><div class="radar__label">Зелёный</div><div class="radar__hint">Был на этой неделе</div></div>
+          </div>
+          <div class="radar__item">
+            <span class="radar__dot radar__dot--yellow" aria-hidden="true"></span>
+            <div><div class="radar__label">Жёлтый</div><div class="radar__hint">Не был 2 недели</div></div>
+          </div>
+          <div class="radar__item">
+            <span class="radar__dot radar__dot--orange" aria-hidden="true"></span>
+            <div><div class="radar__label">Оранжевый</div><div class="radar__hint">Не был месяц или нет контакта больше 30 дней</div></div>
+          </div>
+          <div class="radar__item">
+            <span class="radar__dot radar__dot--red" aria-hidden="true"></span>
+            <div><div class="radar__label">Красный</div><div class="radar__hint">Не был больше 6 недель</div></div>
+          </div>
+        </div>
+        <div class="split">
+          <figure class="screen-frame" data-screen="care">
+            <img src="assets/screens/care.png" alt="Скриншот радара заботы" width="1280" height="800" loading="lazy" decoding="async">
+          </figure>
+          <figure class="screen-frame" data-screen="person">
+            <img src="assets/screens/person.png" alt="Скриншот карточки человека" width="1280" height="800" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Rollout -->
+    <section class="slide" data-slide data-section="rollout" hidden aria-hidden="true">
+      <div class="slide__inner rollout">
+        <div class="rollout__top">
+          <div>
+            <p class="eyebrow">Внедрение</p>
+            <h2>Как подключить церковь к платформе</h2>
+            <p class="lead">Функциональный контур готов. Подключение — это структура, люди и привычка заботы; внешние каналы включаются по готовности секретов.</p>
+          </div>
+          <ol class="timeline timeline--cols" aria-label="Шаги подключения">
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">1</span>
+              <div class="timeline__body">
+                <h3>Церковь в платформе</h3>
+                <p>Создаём церковь, город, slug и доступы пастора / администратора.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">2</span>
+              <div class="timeline__body">
+                <h3>Структура</h3>
+                <p>Округа на карте, домашние группы, адреса и вместимость.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">3</span>
+              <div class="timeline__body">
+                <h3>Люди и роли</h3>
+                <p>Импорт или ввод людей, назначение лидеров и окружных.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">4</span>
+              <div class="timeline__body">
+                <h3>Обучение лидеров</h3>
+                <p>Раздел «Как пользоваться системой», встречи, радар, карточки.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">5</span>
+              <div class="timeline__body">
+                <h3>Публичные формы</h3>
+                <p>Каталог групп, заявка, молитвенная нужда, свидетельства.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">6</span>
+              <div class="timeline__body">
+                <h3>Каналы связи</h3>
+                <p>По готовности: WebPush, Max/VK-боты, Яндекс/VK ID, почта.</p>
+              </div>
+            </li>
+            <li class="timeline__item">
+              <span class="timeline__num" aria-hidden="true">7</span>
+              <div class="timeline__body">
+                <h3>Пасторский контур</h3>
+                <p>Аналитика, заявки, сводки рисков — регулярный ритм руководства.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <figure class="screen-frame screen-frame--wide" data-screen="analytics">
+          <img src="assets/screens/analytics.png" alt="Скриншот церковной аналитики" width="1280" height="800" loading="lazy" decoding="async">
+        </figure>
+      </div>
+    </section>
+
+    <!-- 10. CTA -->
+    <section class="slide" data-slide data-section="cta" hidden aria-hidden="true">
+      <div class="slide__inner split">
+        <div>
+          <p class="eyebrow">Следующий шаг</p>
+          <h2>Подключите вашу церковь</h2>
+          <p class="lead">Готовы показать сервис пасторской команде, обсудить внедрение и ответить на вопросы по данным и безопасности.</p>
+        </div>
+        <ul class="cta-list">
+          <li>
+            <a href="https://wolhg.ru/">
+              <span>
+                <span class="cta-list__label">Сервис</span>
+                wolhg.ru
+              </span>
+            </a>
+          </li>
+          <li>
+            <a href="https://wolhg.ru/homegroup">
+              <span>
+                <span class="cta-list__label">Публичная карта групп</span>
+                wolhg.ru/homegroup
+              </span>
+            </a>
+          </li>
+          <li>
+            <a href="tel:+79778189773">
+              <span>
+                <span class="cta-list__label">Телефон / Max</span>
+                +7&nbsp;977&nbsp;818-97-73
+              </span>
+            </a>
+          </li>
+          <li>
+            <a href="https://t.me/sadakov">
+              <span>
+                <span class="cta-list__label">Telegram</span>
+                @sadakov
+              </span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <nav class="deck-nav" aria-label="Навигация по слайдам">
+    <button type="button" class="deck-btn deck-btn--icon" data-deck-prev aria-label="Предыдущий слайд">‹</button>
+    <div class="deck-dots" data-deck-dots></div>
+    <button type="button" class="deck-btn deck-btn--icon" data-deck-next aria-label="Следующий слайд">›</button>
+  </nav>
+
+  <script type="module" src="assets/preza.mjs"></script>
+</body>
+</html>

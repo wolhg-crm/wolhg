@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'church landing modules and routes are wired' => function (TestCase $test): void {
+        $modules = file_get_contents(__DIR__ . '/../../src/load_modules.php');
+        $index = file_get_contents(__DIR__ . '/../../public/index.php');
+        $features = file_get_contents(__DIR__ . '/../../src/Features.php');
+        $account = file_get_contents(__DIR__ . '/../../src/Account.php');
+        $tenant = file_get_contents(__DIR__ . '/../../src/ChurchTenant.php');
+        $css = file_get_contents(__DIR__ . '/../../public/assets/app.css');
+        $js = file_get_contents(__DIR__ . '/../../public/assets/app.js');
+        $migration = file_get_contents(__DIR__ . '/../../database/migrations/029_church_landing.sql');
+        $schema = file_get_contents(__DIR__ . '/../../database/init/001_schema.sql');
+
+        $test->assertStringContains('ChurchLanding.php', $modules);
+        $test->assertStringContains('ChurchLandingEditor.php', $modules);
+        $test->assertStringContains("preg_match('#^/l/", $index);
+        $test->assertStringContains('church_about_page()', $index);
+        $test->assertStringContains("'/church-page'", $index);
+        $test->assertStringContains('handle_church_landing_post', $index);
+        $test->assertStringContains('О церкви', $index);
+        $test->assertStringContains('manage_church_page', $features);
+        $test->assertStringContains('/church-page', $account);
+        $test->assertStringContains('public_church_about_path', $tenant);
+        $test->assertStringContains("'/l/'", $tenant);
+        $test->assertStringContains('return \'/l/\' . $slug;', $tenant);
+        $test->assertStringContains("'about'", $tenant);
+        $test->assertStringContains('CREATE TABLE church_landing', $migration);
+        $test->assertStringContains('CREATE TABLE church_landing', $schema);
+        $test->assertFileExists(__DIR__ . '/../../database/migrations/030_church_landing_logo.sql');
+        $logoMigration = file_get_contents(__DIR__ . '/../../database/migrations/030_church_landing_logo.sql');
+        $test->assertStringContains('ADD COLUMN logo', $logoMigration);
+        $features = file_get_contents(__DIR__ . '/../../src/Features.php');
+        $test->assertStringContains('/admin/default-logo-save', $features);
+        $test->assertStringContains('Логотип по умолчанию', $features);
+        $brand = file_get_contents(__DIR__ . '/../../src/Brand.php');
+        $test->assertStringContains('brand_platform_default_mark_asset', $brand);
+        $test->assertStringContains('default_church_logo', $brand);
+        $editor = file_get_contents(__DIR__ . '/../../src/ChurchLandingEditor.php');
+        $test->assertStringContains('Логотип', $editor);
+        $test->assertStringContains("church_landing_editor_media_field_html('logo'", $editor);
+        $test->assertStringContains('church_landing_editor_media_field_html', $editor);
+        $test->assertStringContains('data-landing-upload="\'', $editor);
+        $test->assertStringContains('data-landing-payload', $editor);
+        $test->assertStringContains('landing-editor-guide', $editor);
+        $test->assertStringContains('data-landing-section-workspace', $editor);
+        $test->assertStringContains('church_landing_editor_section_card_html', $editor);
+        $test->assertStringContains('data-landing-section-visible', $editor);
+        $test->assertStringContains('Блоки лендинга', $editor);
+        $test->assertStringNotContains('Порядок и видимость на лендинге', $editor);
+        $test->assertStringNotContains('data-landing-panel-pool', $editor);
+        $test->assertStringContains('church_landing_section_hints', $editor);
+        $test->assertStringNotContains('URL или путь', $editor);
+        $test->assertStringNotContains('URL или путь', $features);
+        $test->assertStringContains('landing-media-field', $features);
+        $test->assertStringContains('initChurchLandingEditors', $js);
+        $test->assertStringContains('data-landing-drag-handle', $js);
+        $test->assertStringContains('data-landing-payload', $js);
+        $test->assertStringContains('placeholder = "https://…"', $js);
+        $test->assertStringNotContains('URL или /uploads/church', $js);
+        $test->assertStringNotContains('Иконка URL/путь', $js);
+        $test->assertStringNotContains('Фото URL/путь', $js);
+        $test->assertStringContains('button-icon', $js);
+        $test->assertStringContains('data-landing-section-workspace', $js);
+        $test->assertStringContains('data-landing-section-visible', $js);
+        $test->assertStringContains('moveSection', $js);
+        $test->assertStringNotContains('stashContentPanels', $js);
+        $test->assertStringContains('landing-editor-block', $js);
+        $test->assertStringContains('.landing-media-field', $css);
+        $test->assertStringContains('.landing-editor-badge', $css);
+        $test->assertStringContains('.landing-editor-block', $css);
+        $test->assertStringContains('.church-landing', $css);
+        $test->assertStringContains('initChurchLandingEditor', $js);
+        $test->assertStringContains('churchLandingBindMap', $js);
+        $test->assertFileExists(__DIR__ . '/../../public/uploads/church/.htaccess');
+        $test->assertFileExists(__DIR__ . '/../../public/uploads/church/.gitkeep');
+        $test->assertFileExists(__DIR__ . '/../../src/ChurchLanding.php');
+        $test->assertFileExists(__DIR__ . '/../../src/ChurchLandingEditor.php');
+    },
+];
