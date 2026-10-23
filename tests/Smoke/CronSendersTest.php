@@ -13,6 +13,12 @@ return [
             $test->assertStringContains('exit(cli_with_lock(', $script);
         }
 
+        $test->assertFalse(str_contains($email, 'cli_cron_stagger('));
+        $test->assertStringContains('cli_cron_stagger(15)', $push);
+        $test->assertStringContains('cli_cron_stagger(30)', $bots);
+        $test->assertTrue(strpos($push, 'cli_cron_stagger(15)') < strpos($push, 'bootstrap.php'));
+        $test->assertTrue(strpos($bots, 'cli_cron_stagger(30)') < strpos($bots, 'bootstrap.php'));
+
         $test->assertStringContains('demo_queue_email_allowed', $email);
         $test->assertStringContains('church_is_demo_by_id', $push);
         $test->assertStringContains('church_is_demo_by_id', $bots);

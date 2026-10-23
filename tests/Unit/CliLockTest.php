@@ -5,6 +5,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../src/CliLock.php';
 
 return [
+    'cli_cron_stagger is a no-op for non-positive delay' => function (TestCase $test): void {
+        $started = microtime(true);
+        cli_cron_stagger(0);
+        cli_cron_stagger(-1);
+        $test->assertTrue((microtime(true) - $started) < 0.5);
+    },
+
     'cli_lock_path is stable and namespaced by project root' => function (TestCase $test): void {
         $a = cli_lock_path('send-bot-notifications');
         $b = cli_lock_path('send-bot-notifications');

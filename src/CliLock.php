@@ -7,6 +7,19 @@ declare(strict_types=1);
  * Prevents overlapping send-* processes from exhausting shared-hosting slots.
  */
 
+/**
+ * Stagger parallel "* * * * *" cron starts on shared hosting.
+ * Delays MySQL connect so send-emails / notifications / bots do not hit the DB together.
+ */
+function cli_cron_stagger(int $seconds): void
+{
+    if (PHP_SAPI !== 'cli' || $seconds <= 0) {
+        return;
+    }
+
+    sleep($seconds);
+}
+
 function cli_project_root(): string
 {
     return dirname(__DIR__);

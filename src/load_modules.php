@@ -49,6 +49,7 @@ function application_modules(): array
         ],
         'Domain.php' => [],
         'CliLock.php' => [
+            'cli_cron_stagger',
             'cli_lock_path',
             'cli_with_lock',
         ],

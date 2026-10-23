@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../src/CliLock.php';
+cli_cron_stagger(30);
+
 require __DIR__ . '/../src/bootstrap.php';
 
 function bot_event_text(array $event): string

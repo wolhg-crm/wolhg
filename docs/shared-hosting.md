@@ -98,15 +98,15 @@ WHERE status = 'failed';
 
 ## Cron
 
-Для фоновых отправок добавьте cron-задачи, если хостер поддерживает PHP CLI. Разнесите их по соседним минутам, чтобы три PHP-процесса не стартовали одновременно (на shared-хостинге есть лимит процессов; иначе возможны `SQLSTATE[HY000] [2002] Resource temporarily unavailable`):
+Для фоновых отправок добавьте три cron-задачи (ежеминутно), если хостер поддерживает PHP CLI:
 
 ```cron
-* * * * * php /path/to/project/bin/send-emails.php
-* * * * * sleep 15; php /path/to/project/bin/send-notifications.php
-* * * * * sleep 30; php /path/to/project/bin/send-bot-notifications.php
+* * * * * /opt/php85/bin/php /path/to/project/bin/send-emails.php
+* * * * * /opt/php85/bin/php /path/to/project/bin/send-notifications.php
+* * * * * /opt/php85/bin/php /path/to/project/bin/send-bot-notifications.php
 ```
 
-Каждый `bin/send-*.php` берёт flock: повторный запуск, пока предыдущий ещё работает, тихо пропускается (exit 0). Подключение к MySQL делает несколько попыток при транзиентных ошибках 2002/2003/1040.
+На Timeweb путь PHP обычно `/opt/php85/bin/php`, корень сайта — `/wolhg/public_html`. Скрипты сами разводят старт: notifications ждёт 15 с, bot — 30 с, затем берут flock. Повторный запуск, пока предыдущий ещё работает, тихо пропускается (exit 0). Подключение к MySQL делает несколько попыток при транзиентных ошибках 2002/2003/1040.
 
 Если в логах систематически остаётся `Resource temporarily unavailable` после деплоя этого кода — проверьте нагрузку CPU/MySQL в панели хостинга и не запускайте тяжёлые CLI рядом с пиковым трафиком.
 

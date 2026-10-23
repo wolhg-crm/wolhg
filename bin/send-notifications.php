@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../src/CliLock.php';
+cli_cron_stagger(15);
+
 require __DIR__ . '/../src/bootstrap.php';
 
 $autoload = __DIR__ . '/../vendor/autoload.php';
