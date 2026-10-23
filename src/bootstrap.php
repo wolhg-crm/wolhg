@@ -40,26 +40,30 @@ function request_should_force_https(): bool
     return filter_var($host, FILTER_VALIDATE_IP) === false;
 }
 
-if (!request_is_https() && request_should_force_https()) {
+$isCli = PHP_SAPI === 'cli';
+
+if (!$isCli && !request_is_https() && request_should_force_https()) {
     $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
     $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
     header('Location: https://' . $host . $uri, true, 301);
     exit;
 }
 
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path' => '/',
-    'secure' => request_is_https(),
-    'httponly' => true,
-    'samesite' => 'Lax',
-]);
-session_start();
+if (!$isCli) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => request_is_https(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
 
-header('X-Frame-Options: SAMEORIGIN');
-header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: same-origin');
-header('Permissions-Policy: camera=(), microphone=(), geolocation=(self)');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(self)');
+}
 
 require_once __DIR__ . '/load_modules.php';
 load_application_modules();
@@ -129,14 +133,16 @@ function db(): PDO
         return $pdo;
     }
 
+    require_once __DIR__ . '/../config/db_connect.php';
+
     $db = app_config('db');
-    $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $db['host'], $db['port'], $db['database']);
+    if (!is_array($db)) {
+        throw new RuntimeException('Database configuration is missing. Set db.* in config/local.php.');
+    }
+
     try {
-        $pdo = new PDO($dsn, $db['username'], $db['password'], [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-    } catch (PDOException $e) {
+        $pdo = pdo_connect_with_retry($db);
+    } catch (Throwable $e) {
         $localConfig = __DIR__ . '/../config/local.php';
         $message = 'Database connection failed.';
         if (!is_file($localConfig)) {

@@ -12,11 +12,16 @@ return [
     // 'default_church_name' => 'Название вашей церкви',
     'db' => [
         // Docker: 'db'. Shared hosting (Timeweb и аналоги): 'localhost'.
+        // Если панель хостинга даёт отдельный hostname БД — укажите его вместо localhost.
         'host' => 'localhost',
         'port' => 3306,
         'database' => 'your_database',
         'username' => 'your_user',
         'password' => 'your_password',
+        // Опционально: unix-сокет MySQL (если хостер требует вместо TCP).
+        'unix_socket' => '',
+        'connect_timeout' => 5,
+        'connect_retries' => 4,
     ],
     'security' => [
         'encryption_key' => 'replace-with-production-secret',

@@ -18,6 +18,12 @@ $config = [
         'database' => 'church_care',
         'username' => 'church',
         'password' => 'church',
+        // Optional MySQL socket path (shared hosting). Empty → TCP via host/port.
+        'unix_socket' => '',
+        // Seconds for PDO::ATTR_TIMEOUT on connect.
+        'connect_timeout' => 5,
+        // Attempts for transient SQLSTATE 2002/2003/1040 (shared-hosting load).
+        'connect_retries' => 4,
     ],
     'security' => [
         'encryption_key' => 'local-dev-key',
