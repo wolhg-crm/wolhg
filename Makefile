@@ -5,7 +5,9 @@ NPM := npm
 
 lint:
 	php -l config/db_host.php
+	php -l config/db_connect.php
 	php -l config/app.php
+	php -l src/CliLock.php
 	php -l src/ChurchTenant.php
 	php -l src/DemoAccess.php
 	php -l src/PwaManifest.php

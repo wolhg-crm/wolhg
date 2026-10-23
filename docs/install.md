@@ -74,7 +74,7 @@ php bin/verify-schema.php
 2. Сменить пароль `admin` (и остальных демо-пользователей, если использовали полный seed).
 3. `'url' => 'https://ваш-домен'` для ссылок в письмах.
 4. SMTP в `config/local.php` на большинстве shared-хостингов.
-5. Cron на `bin/send-emails.php`, `bin/send-notifications.php`, `bin/send-bot-notifications.php`.
+5. Cron на `bin/send-emails.php`, `bin/send-notifications.php`, `bin/send-bot-notifications.php` (разнесите по минутам/секундам — см. [shared-hosting.md](shared-hosting.md)).
 6. Права на запись: `public/uploads/church/`, `public/uploads/knowledge/`.
 7. Политика ПДн и текст согласия: [personal-data-rf.md](personal-data-rf.md).
 
