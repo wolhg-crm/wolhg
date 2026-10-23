@@ -24,58 +24,59 @@ if (!class_exists(\Minishlink\WebPush\WebPush::class)) {
     exit(3);
 }
 
-$events = fetch_all('SELECT * FROM notification_events WHERE channel = "webpush" AND status = "pending" ORDER BY id LIMIT 50');
-$auth = [
-    'VAPID' => [
-        'subject' => $config['subject'],
-        'publicKey' => $config['public_key'],
-        'privateKey' => $config['private_key'],
-    ],
-];
-$webPush = new \Minishlink\WebPush\WebPush($auth);
+exit(cli_with_lock('send-notifications', static function () use ($config): void {
+    $events = fetch_all('SELECT * FROM notification_events WHERE channel = "webpush" AND status = "pending" ORDER BY id LIMIT 50');
+    $auth = [
+        'VAPID' => [
+            'subject' => $config['subject'],
+            'publicKey' => $config['public_key'],
+            'privateKey' => $config['private_key'],
+        ],
+    ];
+    $webPush = new \Minishlink\WebPush\WebPush($auth);
 
-foreach ($events as $event) {
-    if (function_exists('is_demo_user')) {
-        $eventUser = fetch_one('SELECT church_id FROM users WHERE id = ? LIMIT 1', [(int) $event['user_id']]);
-        if ($eventUser && church_is_demo_by_id((int) ($eventUser['church_id'] ?? 0))) {
-            db()->prepare('UPDATE notification_events SET status = "failed", error_message = ? WHERE id = ?')
-                ->execute(['Skipped: demo church notification', $event['id']]);
+    foreach ($events as $event) {
+        if (function_exists('is_demo_user')) {
+            $eventUser = fetch_one('SELECT church_id FROM users WHERE id = ? LIMIT 1', [(int) $event['user_id']]);
+            if ($eventUser && church_is_demo_by_id((int) ($eventUser['church_id'] ?? 0))) {
+                db()->prepare('UPDATE notification_events SET status = "failed", error_message = ? WHERE id = ?')
+                    ->execute(['Skipped: demo church notification', $event['id']]);
+                continue;
+            }
+        }
+        $subscriptions = fetch_all('SELECT * FROM web_push_subscriptions WHERE user_id = ?', [$event['user_id']]);
+        if (!$subscriptions) {
+            db()->prepare('UPDATE notification_events SET status = "failed", error_message = ? WHERE id = ?')->execute(['No active WebPush subscriptions', $event['id']]);
             continue;
         }
-    }
-    $subscriptions = fetch_all('SELECT * FROM web_push_subscriptions WHERE user_id = ?', [$event['user_id']]);
-    if (!$subscriptions) {
-        db()->prepare('UPDATE notification_events SET status = "failed", error_message = ? WHERE id = ?')->execute(['No active WebPush subscriptions', $event['id']]);
-        continue;
-    }
 
-    foreach ($subscriptions as $subscription) {
-        $webPush->queueNotification(
-            \Minishlink\WebPush\Subscription::create([
-                'endpoint' => $subscription['endpoint'],
-                'keys' => [
-                    'p256dh' => $subscription['p256dh'],
-                    'auth' => $subscription['auth'],
-                ],
-            ]),
-            json_encode([
-                'title' => $event['title'],
-                'body' => $event['body'],
-                'url' => $event['url'],
-            ], JSON_UNESCAPED_UNICODE)
-        );
-    }
-
-    $ok = true;
-    $error = null;
-    foreach ($webPush->flush() as $report) {
-        if (!$report->isSuccess()) {
-            $ok = false;
-            $error = $report->getReason();
+        foreach ($subscriptions as $subscription) {
+            $webPush->queueNotification(
+                \Minishlink\WebPush\Subscription::create([
+                    'endpoint' => $subscription['endpoint'],
+                    'keys' => [
+                        'p256dh' => $subscription['p256dh'],
+                        'auth' => $subscription['auth'],
+                    ],
+                ]),
+                json_encode([
+                    'title' => $event['title'],
+                    'body' => $event['body'],
+                    'url' => $event['url'],
+                ], JSON_UNESCAPED_UNICODE)
+            );
         }
+
+        $ok = true;
+        $error = null;
+        foreach ($webPush->flush() as $report) {
+            if (!$report->isSuccess()) {
+                $ok = false;
+                $error = $report->getReason();
+            }
+        }
+
+        db()->prepare('UPDATE notification_events SET status = ?, error_message = ?, sent_at = IF(? = "sent", NOW(), sent_at) WHERE id = ?')
+            ->execute([$ok ? 'sent' : 'failed', $error, $ok ? 'sent' : 'failed', $event['id']]);
     }
-
-    db()->prepare('UPDATE notification_events SET status = ?, error_message = ?, sent_at = IF(? = "sent", NOW(), sent_at) WHERE id = ?')
-        ->execute([$ok ? 'sent' : 'failed', $error, $ok ? 'sent' : 'failed', $event['id']]);
-}
-
+}));

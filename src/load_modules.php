@@ -48,6 +48,10 @@ function application_modules(): array
             'church_landing_from_post',
         ],
         'Domain.php' => [],
+        'CliLock.php' => [
+            'cli_lock_path',
+            'cli_with_lock',
+        ],
         'Migrate.php' => [
             'migrate_run',
             'migrate_pending_versions',
