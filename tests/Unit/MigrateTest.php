@@ -28,6 +28,7 @@ SQL;
         $test->assertTrue(in_array('026_districts.sql', $files, true));
         $test->assertTrue(in_array('027_rename_regional_leader.sql', $files, true));
         $test->assertTrue(in_array('038_mcp_oauth.sql', $files, true));
+        $test->assertTrue(in_array('043_users_email_unique_per_church.sql', $files, true));
         $sorted = $files;
         sort($sorted, SORT_STRING);
         $test->assertSame($sorted, $files);
@@ -46,6 +47,10 @@ SQL;
         $test->assertTrue(in_array('mcp_oauth_tokens', $tables, true));
         $test->assertTrue(in_array('mcp_oauth_codes', $tables, true));
         $test->assertTrue(in_array('mcp_oauth_cimd', $tables, true));
+
+        $test->assertTrue(isset($map['043_users_email_unique_per_church.sql']));
+        $test->assertSame('index', $map['043_users_email_unique_per_church.sql']['type']);
+        $test->assertSame('uniq_users_email_church', $map['043_users_email_unique_per_church.sql']['index']);
     },
 
     'effect probes use exact filenames not shared 030 prefix' => function (TestCase $test): void {
