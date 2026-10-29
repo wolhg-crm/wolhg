@@ -57,7 +57,7 @@ CREATE TABLE users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(160) NOT NULL,
   login VARCHAR(80) NOT NULL UNIQUE,
-  email VARCHAR(190) NOT NULL UNIQUE,
+  email VARCHAR(190) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('member','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL DEFAULT 'member',
   church_id INT UNSIGNED NULL,
@@ -65,6 +65,7 @@ CREATE TABLE users (
   two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0,
   two_factor_secret VARCHAR(32) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_users_email_church (email, church_id),
   INDEX (church_id),
   INDEX (group_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

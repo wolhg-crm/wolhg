@@ -80,6 +80,17 @@ function migrate_column_exists(PDO $pdo, string $table, string $column): bool
     return (bool) $stmt->fetchColumn();
 }
 
+function migrate_index_exists(PDO $pdo, string $table, string $index): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT 1 FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1'
+    );
+    $stmt->execute([$table, $index]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
 function migrate_users_role_enum(PDO $pdo): string
 {
     $stmt = $pdo->query(
@@ -113,6 +124,11 @@ function migrate_effect_probe_map(): array
             'type' => 'tables',
             'tables' => ['mcp_oauth_clients', 'mcp_oauth_codes', 'mcp_oauth_tokens', 'mcp_oauth_cimd'],
         ],
+        '043_users_email_unique_per_church.sql' => [
+            'type' => 'index',
+            'table' => 'users',
+            'index' => 'uniq_users_email_church',
+        ],
     ];
 }
 
@@ -134,6 +150,7 @@ function migrate_effect_present(PDO $pdo, string $version): ?bool
     return match ($probe['type']) {
         'table' => migrate_table_exists($pdo, (string) $probe['table']),
         'column' => migrate_column_exists($pdo, (string) $probe['table'], (string) $probe['column']),
+        'index' => migrate_index_exists($pdo, (string) $probe['table'], (string) $probe['index']),
         'tables' => migrate_all_tables_exist($pdo, $probe['tables'] ?? []),
         'users_role_enum_district_leader' => migrate_district_leader_enum_present($pdo),
         default => null,
@@ -229,6 +246,44 @@ function migrate_split_sql(string $sql): array
 }
 
 /**
+ * Drop legacy single-column UNIQUE on users.email (index name is usually `email`).
+ */
+function migrate_drop_single_column_unique_email(PDO $pdo): void
+{
+    $stmt = $pdo->query(
+        "SELECT INDEX_NAME,
+                COUNT(*) AS col_count,
+                SUM(COLUMN_NAME = 'email') AS email_cols
+         FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'users'
+           AND NON_UNIQUE = 0
+           AND INDEX_NAME <> 'PRIMARY'
+         GROUP BY INDEX_NAME"
+    );
+    if (!$stmt) {
+        return;
+    }
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ((int) ($row['col_count'] ?? 0) === 1 && (int) ($row['email_cols'] ?? 0) === 1) {
+            $name = str_replace('`', '``', (string) $row['INDEX_NAME']);
+            $pdo->exec('ALTER TABLE users DROP INDEX `' . $name . '`');
+        }
+    }
+}
+
+/**
+ * Idempotent: email uniqueness becomes (email, church_id) for multi-tenant signup.
+ */
+function migrate_apply_users_email_unique_per_church(PDO $pdo): void
+{
+    migrate_drop_single_column_unique_email($pdo);
+    if (!migrate_index_exists($pdo, 'users', 'uniq_users_email_church')) {
+        $pdo->exec('ALTER TABLE users ADD UNIQUE KEY uniq_users_email_church (email, church_id)');
+    }
+}
+
+/**
  * Execute migration SQL statements without requiring a fresh schema_migrations row.
  * Used for self-heal when a version was recorded but the effect is missing.
  */
@@ -238,6 +293,21 @@ function migrate_exec_file(PDO $pdo, string $version): void
     if (!is_file($path)) {
         throw new RuntimeException('Migration file missing: ' . $version);
     }
+
+    // DDL index swaps are not safely re-run as raw SQL after a partial apply.
+    if ($version === '043_users_email_unique_per_church.sql') {
+        try {
+            migrate_apply_users_email_unique_per_church($pdo);
+            migrate_record($pdo, $version);
+        } catch (Throwable $e) {
+            throw new RuntimeException('Migration failed: ' . $version . ' — ' . $e->getMessage(), 0, $e);
+        }
+        if (function_exists('db_table_exists_clear_cache')) {
+            db_table_exists_clear_cache();
+        }
+        return;
+    }
+
     $sql = (string) file_get_contents($path);
     $statements = migrate_split_sql($sql);
     if ($statements === []) {
