@@ -70,6 +70,9 @@ php bin/migrate.php --dry-run
 'url' => 'https://your-domain.ru',
 ```
 
+Письма восстановления пароля отправляются сразу при запросе (без ожидания cron).
+Остальная очередь обрабатывается `bin/send-emails.php` по cron.
+
 На Timeweb PHP `mail()` часто не работает. Включите SMTP:
 
 ```php

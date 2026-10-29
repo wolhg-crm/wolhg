@@ -76,6 +76,91 @@ function send_app_mail(string $to, string $subject, string $body): array
 }
 
 /**
+ * Send one queued email_notifications row and update its status.
+ *
+ * @return array{ok: bool, error: ?string, skipped?: bool}
+ */
+function email_notification_dispatch_one(int $id): array
+{
+    $item = fetch_one('SELECT * FROM email_notifications WHERE id = ? LIMIT 1', [$id]);
+    if (!$item) {
+        return ['ok' => false, 'error' => 'Notification not found'];
+    }
+    if ((string) ($item['status'] ?? '') !== 'pending') {
+        return ['ok' => true, 'error' => null, 'skipped' => true];
+    }
+
+    $userId = isset($item['user_id']) ? (int) $item['user_id'] : null;
+    if (function_exists('demo_queue_email_allowed') && !demo_queue_email_allowed($userId > 0 ? $userId : null)) {
+        db()->prepare('UPDATE email_notifications SET status = "failed", error_message = ? WHERE id = ?')
+            ->execute(['Skipped: demo church notification', $id]);
+
+        return ['ok' => false, 'error' => 'Skipped: demo church notification', 'skipped' => true];
+    }
+
+    try {
+        $result = send_app_mail((string) $item['to_email'], (string) $item['subject'], (string) $item['body']);
+        if (!empty($result['ok'])) {
+            db()->prepare('UPDATE email_notifications SET status = "sent", sent_at = NOW(), error_message = NULL WHERE id = ?')
+                ->execute([$id]);
+
+            return ['ok' => true, 'error' => null];
+        }
+        $error = (string) ($result['error'] ?? 'unknown mail error');
+        db()->prepare('UPDATE email_notifications SET status = "failed", error_message = ? WHERE id = ?')
+            ->execute([$error, $id]);
+
+        return ['ok' => false, 'error' => $error];
+    } catch (Throwable $e) {
+        db()->prepare('UPDATE email_notifications SET status = "failed", error_message = ? WHERE id = ?')
+            ->execute([$e->getMessage(), $id]);
+
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/**
+ * Drain pending email_notifications (cron and web fallback share this).
+ *
+ * @return array{sent:int, failed:int, skipped:int}
+ */
+function email_notifications_dispatch_pending(int $limit = 50): array
+{
+    $limit = max(1, min(100, $limit));
+    $items = fetch_all(
+        'SELECT id FROM email_notifications WHERE status = "pending" ORDER BY created_at ASC LIMIT ' . $limit
+    );
+    $sent = 0;
+    $failed = 0;
+    $skipped = 0;
+    foreach ($items as $item) {
+        $result = email_notification_dispatch_one((int) $item['id']);
+        if (!empty($result['skipped'])) {
+            $skipped++;
+            if (empty($result['ok'])) {
+                $failed++;
+            }
+            continue;
+        }
+        if (!empty($result['ok'])) {
+            $sent++;
+        } else {
+            $failed++;
+        }
+    }
+
+    return ['sent' => $sent, 'failed' => $failed, 'skipped' => $skipped];
+}
+
+/**
+ * Critical auth mail (password reset) must not wait for cron on shared hosting.
+ */
+function email_notification_types_dispatch_immediately(): array
+{
+    return ['password_reset', 'password_changed', 'participant_approved'];
+}
+
+/**
  * @return array{ok: bool, error: ?string}
  */
 function send_app_mail_php(string $to, string $subject, string $body, string $from): array
