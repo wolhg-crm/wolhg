@@ -126,15 +126,20 @@ function login_page(): void
             } else {
                 unset($_SESSION['pending_2fa_user_id'], $_SESSION['pending_2fa_started_at']);
                 $loginValue = normalize_user_login((string) ($_POST['login'] ?? ''));
-                $user = function_exists('find_user_for_church_login')
-                    ? find_user_for_church_login($loginValue, (int) $church['id'])
+                $password = (string) ($_POST['password'] ?? '');
+                $user = function_exists('authenticate_church_login')
+                    ? authenticate_church_login($loginValue, $password, (int) $church['id'])
                     : null;
                 if (!$user) {
+                    // Legacy fallback before migrate helpers are loaded.
                     $stmt = db()->prepare('SELECT * FROM users WHERE login = ? LIMIT 1');
                     $stmt->execute([$loginValue]);
-                    $user = $stmt->fetch() ?: null;
+                    $fallback = $stmt->fetch() ?: null;
+                    if ($fallback && password_verify($password, (string) $fallback['password_hash'])) {
+                        $user = $fallback;
+                    }
                 }
-                if ($user && password_verify((string) ($_POST['password'] ?? ''), $user['password_hash'])) {
+                if ($user) {
                     if (function_exists('demo_password_login_allowed') && !demo_password_login_allowed($user)) {
                         $error = 'Демо-учётные записи открываются только через /demo/enter.';
                     } elseif (!user_can_access_church($user, (int) $church['id'])) {

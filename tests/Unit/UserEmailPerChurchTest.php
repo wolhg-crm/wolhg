@@ -81,7 +81,7 @@ return [
         $account = (string) file_get_contents(__DIR__ . '/../../src/Account.php');
         $mail = (string) file_get_contents(__DIR__ . '/../../src/Mail.php');
         $test->assertStringContains('function find_users_by_email(string $email, ?int $churchId = null)', $account);
-        $test->assertStringContains('foreach (find_users_by_email($email, $churchId) as $user)', $account);
+        $test->assertStringContains('foreach (find_users_for_church_password_reset($email, $churchId) as $user)', $account);
         $test->assertStringContains('Если почта есть в этой церкви', $account);
         $test->assertStringContains("'password_reset'", $mail);
         $test->assertStringContains('email_notification_dispatch_one', $account);

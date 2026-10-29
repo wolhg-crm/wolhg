@@ -506,9 +506,10 @@ return [
             $test->assertStringContains($route, $index);
         }
 
-        $test->assertStringContains('find_user_for_church_login', $index);
+        $test->assertStringContains('authenticate_church_login', $index);
         $test->assertStringContains('function login_from_email', $account);
         $test->assertStringContains('function find_user_for_church_login', $account);
+        $test->assertStringContains('function authenticate_church_login', $account);
         $test->assertStringContains('login:address.all.read', $social);
         $test->assertStringContains('render_yandex_address_picker', $social);
         $test->assertStringContains("code_challenge_method'] = 'S256'", $social);

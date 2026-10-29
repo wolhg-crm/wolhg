@@ -47,9 +47,29 @@ return [
         $account = (string) file_get_contents(__DIR__ . '/../../src/Account.php');
         $index = (string) file_get_contents(__DIR__ . '/../../public/index.php');
         $test->assertStringContains('function find_user_for_church_login(string $login, int $churchId)', $account);
+        $test->assertStringContains('function authenticate_church_login', $account);
         $test->assertStringContains('function unique_user_login(string $base, ?int $excludeUserId = null, ?int $churchId = null)', $account);
-        $test->assertStringContains('find_user_for_church_login($loginValue, (int) $church[\'id\'])', $index);
+        $test->assertStringContains('authenticate_church_login($loginValue, $password, (int) $church[\'id\'])', $index);
         $test->assertStringContains("app_path('/forgot-password')", $index);
+    },
+
+    'TC3b: super_admin wins when login collides with a church-local account' => function (TestCase $test): void {
+        $local = ['id' => 10, 'role' => 'pastor', 'login' => 'msadakov', 'church_id' => 2];
+        $super = ['id' => 1, 'role' => 'super_admin', 'login' => 'msadakov', 'church_id' => 1];
+        $picked = prefer_super_admin_login_match([$local, $super]);
+        $test->assertSame(1, (int) ($picked['id'] ?? 0));
+        $test->assertSame('super_admin', (string) ($picked['role'] ?? ''));
+
+        $onlyLocal = prefer_super_admin_login_match([$local]);
+        $test->assertSame(10, (int) ($onlyLocal['id'] ?? 0));
+        $test->assertNull(prefer_super_admin_login_match([]));
+    },
+
+    'TC3c: password reset from a church includes platform super_admin' => function (TestCase $test): void {
+        $account = (string) file_get_contents(__DIR__ . '/../../src/Account.php');
+        $test->assertStringContains('function find_users_for_church_password_reset', $account);
+        $test->assertStringContains('find_users_for_church_password_reset($email, $churchId)', $account);
+        $test->assertStringContains('u.role = "super_admin"', $account);
     },
 
     'TC4: forgot-password is a legacy CRM path under the church slug' => function (TestCase $test): void {

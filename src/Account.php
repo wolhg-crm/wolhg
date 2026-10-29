@@ -47,30 +47,145 @@ function unique_user_login(string $base, ?int $excludeUserId = null, ?int $churc
 }
 
 /**
+ * Candidate accounts for a login form inside a church tenant.
+ * Includes the church-local user (if any) and the platform super_admin with the same login.
+ *
+ * @return list<array<string,mixed>>
+ */
+function find_users_for_church_login(string $login, int $churchId): array
+{
+    $login = normalize_user_login($login);
+    if ($login === '' || $churchId <= 0) {
+        return [];
+    }
+
+    $candidates = [];
+    $local = fetch_one(
+        'SELECT * FROM users WHERE login = ? AND church_id = ? LIMIT 1',
+        [$login, $churchId]
+    );
+    if ($local) {
+        $candidates[] = $local;
+    }
+
+    $super = fetch_one(
+        'SELECT * FROM users WHERE login = ? AND role = "super_admin" LIMIT 1',
+        [$login]
+    );
+    if ($super) {
+        $superId = (int) ($super['id'] ?? 0);
+        $already = false;
+        foreach ($candidates as $row) {
+            if ((int) ($row['id'] ?? 0) === $superId) {
+                $already = true;
+                break;
+            }
+        }
+        if (!$already) {
+            $candidates[] = $super;
+        }
+    }
+
+    return $candidates;
+}
+
+/**
  * Resolve an account for password/login form inside a church tenant.
- * Super-admins may enter any church with their platform login.
+ * Super-admins may enter any church with their platform login even when a
+ * local account reuses the same login string.
  *
  * @return array<string,mixed>|null
  */
 function find_user_for_church_login(string $login, int $churchId): ?array
 {
-    $login = normalize_user_login($login);
-    if ($login === '' || $churchId <= 0) {
+    $candidates = find_users_for_church_login($login, $churchId);
+    if ($candidates === []) {
         return null;
     }
-
-    $user = fetch_one(
-        'SELECT * FROM users WHERE login = ? AND church_id = ? LIMIT 1',
-        [$login, $churchId]
-    );
-    if ($user) {
-        return $user;
+    foreach ($candidates as $row) {
+        if (($row['role'] ?? '') === 'super_admin') {
+            return $row;
+        }
     }
 
-    return fetch_one(
-        'SELECT * FROM users WHERE login = ? AND role = "super_admin" LIMIT 1',
-        [$login]
+    return $candidates[0];
+}
+
+/**
+ * Among password-matched candidates, prefer platform super_admin.
+ *
+ * @param list<array<string,mixed>> $matchedPasswordUsers
+ * @return array<string,mixed>|null
+ */
+function prefer_super_admin_login_match(array $matchedPasswordUsers): ?array
+{
+    if ($matchedPasswordUsers === []) {
+        return null;
+    }
+    foreach ($matchedPasswordUsers as $row) {
+        if (($row['role'] ?? '') === 'super_admin') {
+            return $row;
+        }
+    }
+
+    return $matchedPasswordUsers[0];
+}
+
+/**
+ * Authenticate login+password for a church tenant.
+ * If both a local account and a super_admin share the login, the password
+ * decides; when both passwords match, prefer super_admin so platform access
+ * is never shadowed by a church-local twin.
+ *
+ * @return array<string,mixed>|null
+ */
+function authenticate_church_login(string $login, string $password, int $churchId): ?array
+{
+    $matched = [];
+    foreach (find_users_for_church_login($login, $churchId) as $candidate) {
+        if (password_verify($password, (string) ($candidate['password_hash'] ?? ''))) {
+            $matched[] = $candidate;
+        }
+    }
+
+    return prefer_super_admin_login_match($matched);
+}
+
+/**
+ * Accounts eligible for password reset from a church forgot-password page:
+ * church-local users with the email, plus platform super_admin with that email.
+ *
+ * @return list<array<string,mixed>>
+ */
+function find_users_for_church_password_reset(string $email, int $churchId): array
+{
+    $users = find_users_by_email($email, $churchId);
+    $email = normalize_account_email($email);
+    if ($email === '' || $churchId <= 0) {
+        return $users;
+    }
+
+    $super = fetch_one(
+        'SELECT u.*, c.name AS church_name, c.city AS church_city, c.slug AS church_slug
+         FROM users u
+         LEFT JOIN churches c ON c.id = u.church_id
+         WHERE u.email = ? AND u.role = "super_admin"
+         LIMIT 1',
+        [$email]
     );
+    if (!$super) {
+        return $users;
+    }
+
+    $superId = (int) ($super['id'] ?? 0);
+    foreach ($users as $row) {
+        if ((int) ($row['id'] ?? 0) === $superId) {
+            return $users;
+        }
+    }
+    $users[] = $super;
+
+    return $users;
 }
 
 /**
@@ -1823,8 +1938,8 @@ function forgot_password_page(): void
         $message = 'Если почта есть в этой церкви, мы отправили ссылку восстановления.';
         if (throttle_action('forgot-password:' . $churchId . ':' . ($_SERVER['REMOTE_ADDR'] ?? 'local'), 5, 600)) {
             $email = normalize_account_email((string) ($_POST['email'] ?? ''));
-            // Tenant isolation: only the account in the current church.
-            foreach (find_users_by_email($email, $churchId) as $user) {
+            // Church-local accounts + platform super_admin (works in every church).
+            foreach (find_users_for_church_password_reset($email, $churchId) as $user) {
                 $token = bin2hex(random_bytes(24));
                 db()->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))')
                     ->execute([(int) $user['id'], hash('sha256', $token)]);
