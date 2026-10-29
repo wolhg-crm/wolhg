@@ -61,6 +61,14 @@ function church_invite_normalize_signup(array $input): array
     if ($name === '') {
         return church_invite_signup_error('Укажите ваше имя.', $name, $email, $login, $password, $churchName, $city, $slugInput, $timezone);
     }
+    if (function_exists('normalize_account_email')) {
+        $email = normalize_account_email($email);
+    } elseif (function_exists('ChurchCare\\normalize_email')) {
+        $normalizedEmail = \ChurchCare\normalize_email($email);
+        $email = $normalizedEmail ?? mb_strtolower($email);
+    } else {
+        $email = mb_strtolower($email);
+    }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return church_invite_signup_error('Укажите корректный email.', $name, $email, $login, $password, $churchName, $city, $slugInput, $timezone);
     }
@@ -374,10 +382,8 @@ function consume_church_invite(string $token, array $input): array
         return ['ok' => false, 'error' => $normalized['error'], 'user_id' => null, 'church_id' => null, 'slug' => null];
     }
 
-    if (fetch_one('SELECT id FROM users WHERE email = ? LIMIT 1', [$normalized['email']])) {
-        return ['ok' => false, 'error' => 'Пользователь с такой почтой уже есть. Войдите или восстановите пароль.', 'user_id' => null, 'church_id' => null, 'slug' => null];
-    }
-
+    // Same email may already exist in another church — that is allowed.
+    // A new church always gets a new church_id, so (email, church_id) stays unique.
     $login = unique_user_login($normalized['login']);
     $slug = unique_church_slug($normalized['slug_base']);
     if (!church_slug_is_valid($slug)) {
@@ -401,11 +407,6 @@ function consume_church_invite(string $token, array $input): array
         if (!$locked) {
             $pdo->rollBack();
             return ['ok' => false, 'error' => 'Ссылка недействительна или отозвана.', 'user_id' => null, 'church_id' => null, 'slug' => null];
-        }
-
-        if (fetch_one('SELECT id FROM users WHERE email = ? LIMIT 1', [$normalized['email']])) {
-            $pdo->rollBack();
-            return ['ok' => false, 'error' => 'Пользователь с такой почтой уже есть. Войдите или восстановите пароль.', 'user_id' => null, 'church_id' => null, 'slug' => null];
         }
 
         $pdo->prepare('INSERT INTO churches (name, city, slug, timezone) VALUES (?, ?, ?, ?)')

@@ -616,11 +616,14 @@ function mcp_tool_update_profile(array $user, array $arguments): array
     if ($name === '' || $email === '') {
         throw new InvalidArgumentException('Имя и почта обязательны');
     }
+    $email = function_exists('normalize_account_email')
+        ? normalize_account_email($email)
+        : mb_strtolower(trim($email));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new InvalidArgumentException('Некорректный email');
     }
     if (email_owned_by_other($email, (int) $user['id'])) {
-        throw new InvalidArgumentException('Почта уже используется другим пользователем');
+        throw new InvalidArgumentException('Почта уже используется другим пользователем в этой церкви');
     }
     $login = unique_user_login($loginRaw, (int) $user['id']);
     db()->prepare('UPDATE users SET name = ?, login = ?, email = ? WHERE id = ?')

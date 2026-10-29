@@ -824,13 +824,22 @@ function handle_feature_post(string $path, string $method, array $user): void
         }
         if ($path === '/admin/user-create') {
             $role = in_array($_POST['role'] ?? 'member', roles(), true) ? (string) $_POST['role'] : 'member';
-            $email = trim((string) $_POST['email']);
+            $email = function_exists('normalize_account_email')
+                ? normalize_account_email((string) $_POST['email'])
+                : mb_strtolower(trim((string) $_POST['email']));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                ajax_redirect('/admin', 'Укажите корректный email');
+            }
             $login = unique_user_login(login_from_email($email));
             $churchId = (int) ($_POST['church_id'] ?? 0);
             if ($role === 'super_admin') {
                 $churchId = $churchId > 0 ? $churchId : ((int) ($user['church_id'] ?? 0) ?: null);
             } elseif ($churchId <= 0 || !find_church_by_id($churchId)) {
                 ajax_redirect('/admin', 'Укажите церковь для пользователя');
+            }
+            $churchScope = is_int($churchId) && $churchId > 0 ? $churchId : null;
+            if (user_email_taken_in_church($email, $churchScope)) {
+                ajax_redirect('/admin', 'Почта уже используется другим пользователем в этой церкви');
             }
             db()->prepare('INSERT INTO users (name, login, email, password_hash, role, church_id, group_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
                 ->execute([
