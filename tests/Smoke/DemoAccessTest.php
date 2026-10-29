@@ -58,12 +58,14 @@ return [
 
     'senders skip demo church notifications' => function (TestCase $test): void {
         $email = file_get_contents(__DIR__ . '/../../bin/send-emails.php');
+        $mail = file_get_contents(__DIR__ . '/../../src/Mail.php');
         $push = file_get_contents(__DIR__ . '/../../bin/send-notifications.php');
         $bots = file_get_contents(__DIR__ . '/../../bin/send-bot-notifications.php');
-        $test->assertStringContains('demo_queue_email_allowed', $email);
+        $test->assertStringContains('email_notifications_dispatch_pending', $email);
+        $test->assertStringContains('demo_queue_email_allowed', $mail);
         $test->assertStringContains('church_is_demo_by_id', $push);
         $test->assertStringContains('church_is_demo_by_id', $bots);
-        $test->assertStringContains('Skipped: demo church notification', $email);
+        $test->assertStringContains('Skipped: demo church notification', $mail);
     },
 
     'public homegroup catalog excludes demo churches' => function (TestCase $test): void {

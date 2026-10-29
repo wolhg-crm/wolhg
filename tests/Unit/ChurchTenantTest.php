@@ -64,7 +64,8 @@ return [
         $test->assertSame('/homegroup', app_path('/homegroup'));
         $test->assertSame('/homegroup/join', app_path('/homegroup/join'));
         $test->assertSame('/admin', app_path('/admin'));
-        $test->assertSame('/forgot-password', app_path('/forgot-password'));
+        $test->assertSame('/reset-password', app_path('/reset-password'));
+        $test->assertSame('/pushkino/forgot-password', app_path('/forgot-password'));
         set_current_church(null);
     },
 
@@ -109,12 +110,15 @@ return [
     'legacy CRM path detection covers hubs and mutating verbs' => function (TestCase $test): void {
         $test->assertTrue(is_legacy_crm_path('/groups'));
         $test->assertTrue(is_legacy_crm_path('/login'));
+        $test->assertTrue(is_legacy_crm_path('/forgot-password'));
         $test->assertTrue(is_legacy_crm_path('/person-create'));
         $test->assertTrue(is_legacy_crm_path('/church-settings'));
         $test->assertFalse(is_legacy_crm_path('/'));
         $test->assertFalse(is_legacy_crm_path('/homegroup'));
         $test->assertFalse(is_legacy_crm_path('/admin'));
         $test->assertFalse(is_legacy_crm_path('/prayer-request'));
+        $test->assertFalse(is_platform_root_path('/forgot-password'));
+        $test->assertTrue(is_platform_root_path('/reset-password'));
         // Unknown church-like slugs must not be treated as legacy CRM verbs.
         $test->assertFalse(is_legacy_crm_path('/church-3'));
         $test->assertFalse(is_legacy_crm_path('/korolev'));

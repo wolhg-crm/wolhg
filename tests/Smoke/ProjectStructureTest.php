@@ -495,16 +495,20 @@ return [
         $bots = file_get_contents(__DIR__ . '/../../src/Bots.php');
         $compose = file_get_contents(__DIR__ . '/../../docker-compose.yml');
 
-        foreach (['login VARCHAR(80) NOT NULL UNIQUE', 'social_identities', 'oauth_states', 'bot_accounts', 'bot_link_tokens', 'bot_inbound_messages', 'yandex_geocode_cache', 'addresses_json'] as $needle) {
+        foreach (['login VARCHAR(80) NOT NULL', 'uniq_users_login_church', 'social_identities', 'oauth_states', 'bot_accounts', 'bot_link_tokens', 'bot_inbound_messages', 'yandex_geocode_cache', 'addresses_json'] as $needle) {
             $test->assertStringContains($needle, $schema);
         }
+        $test->assertStringNotContains('login VARCHAR(80) NOT NULL UNIQUE', $schema);
+        $test->assertStringContains('idx_social_provider_external', $schema);
+        $test->assertStringNotContains('uniq_social_provider_user', $schema);
 
         foreach (["/social/start", "/social/callback", "/bot/max/webhook", "/bot/vk/webhook", "/geocode/reverse"] as $route) {
             $test->assertStringContains($route, $index);
         }
 
-        $test->assertStringContains('SELECT * FROM users WHERE login = ?', $index);
+        $test->assertStringContains('find_user_for_church_login', $index);
         $test->assertStringContains('function login_from_email', $account);
+        $test->assertStringContains('function find_user_for_church_login', $account);
         $test->assertStringContains('login:address.all.read', $social);
         $test->assertStringContains('render_yandex_address_picker', $social);
         $test->assertStringContains("code_challenge_method'] = 'S256'", $social);

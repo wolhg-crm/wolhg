@@ -29,6 +29,8 @@ SQL;
         $test->assertTrue(in_array('027_rename_regional_leader.sql', $files, true));
         $test->assertTrue(in_array('038_mcp_oauth.sql', $files, true));
         $test->assertTrue(in_array('043_users_email_unique_per_church.sql', $files, true));
+        $test->assertTrue(in_array('044_users_login_unique_per_church.sql', $files, true));
+        $test->assertTrue(in_array('045_social_identity_per_church.sql', $files, true));
         $sorted = $files;
         sort($sorted, SORT_STRING);
         $test->assertSame($sorted, $files);

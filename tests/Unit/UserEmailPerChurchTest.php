@@ -77,12 +77,15 @@ return [
         $test->assertStringContains('user_email_taken_in_church($email, $churchId > 0 ? $churchId : null)', $account);
     },
 
-    'TC7: forgot-password sends a reset for every account sharing the email' => function (TestCase $test): void {
+    'TC7: forgot-password is church-scoped and dispatches reset mail immediately' => function (TestCase $test): void {
         $account = (string) file_get_contents(__DIR__ . '/../../src/Account.php');
-        $test->assertStringContains('function find_users_by_email', $account);
-        $test->assertStringContains('foreach (find_users_by_email($email) as $user)', $account);
-        $test->assertStringContains('Восстановление пароля CRM — ', $account);
-        $test->assertStringContains('Аккаунт в церкви', $account);
+        $mail = (string) file_get_contents(__DIR__ . '/../../src/Mail.php');
+        $test->assertStringContains('function find_users_by_email(string $email, ?int $churchId = null)', $account);
+        $test->assertStringContains('foreach (find_users_by_email($email, $churchId) as $user)', $account);
+        $test->assertStringContains('Если почта есть в этой церкви', $account);
+        $test->assertStringContains("'password_reset'", $mail);
+        $test->assertStringContains('email_notification_dispatch_one', $account);
+        $test->assertStringContains('email_notification_types_dispatch_immediately', $mail);
         $test->assertStringNotContains(
             "fetch_one('SELECT * FROM users WHERE email = ? LIMIT 1', [\$email])",
             $account
@@ -91,7 +94,7 @@ return [
 
     'TC8: church onboarding no longer rejects an email used in another church' => function (TestCase $test): void {
         $onboarding = (string) file_get_contents(__DIR__ . '/../../src/ChurchOnboarding.php');
-        $test->assertStringContains('Same email may already exist in another church', $onboarding);
+        $test->assertStringContains('Same email/login may already exist in another church', $onboarding);
         $test->assertStringNotContains(
             "fetch_one('SELECT id FROM users WHERE email = ? LIMIT 1', [\$normalized['email']])",
             $onboarding
@@ -108,7 +111,7 @@ return [
         $test->assertStringContains('function migrate_drop_single_column_unique_email', $migrate);
         $test->assertStringContains('function migrate_apply_users_email_unique_per_church', $migrate);
         $test->assertStringContains("043_users_email_unique_per_church.sql", $migrate);
-        $test->assertStringContains("migrate_apply_users_email_unique_per_church(\$pdo)", $migrate);
+        $test->assertStringContains("'043_users_email_unique_per_church.sql' => 'migrate_apply_users_email_unique_per_church'", $migrate);
     },
 
     'TC10: admin user-create and MCP profile use church-scoped email ownership' => function (TestCase $test): void {
