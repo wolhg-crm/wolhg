@@ -625,7 +625,7 @@ function mcp_tool_update_profile(array $user, array $arguments): array
     if (email_owned_by_other($email, (int) $user['id'])) {
         throw new InvalidArgumentException('Почта уже используется другим пользователем в этой церкви');
     }
-    $login = unique_user_login($loginRaw, (int) $user['id']);
+    $login = unique_user_login($loginRaw, (int) $user['id'], (int) ($user['church_id'] ?? 0) ?: null);
     db()->prepare('UPDATE users SET name = ?, login = ?, email = ? WHERE id = ?')
         ->execute([$name, $login, $email, (int) $user['id']]);
     audit('profile_update', 'user', (int) $user['id'], ['source' => 'mcp']);

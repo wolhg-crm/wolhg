@@ -559,7 +559,7 @@ function is_platform_root_path(string $path): bool
     }
 
     $roots = [
-        '/forgot-password',
+        // /forgot-password is church-scoped (legacy_crm_paths) so reset stays tenant-isolated.
         '/reset-password',
         '/account-invite',
         '/role-invite',
@@ -605,6 +605,7 @@ function legacy_crm_paths(): array
 {
     return [
         '/login',
+        '/forgot-password',
         '/logout',
         '/',
         '/groups',

@@ -126,9 +126,14 @@ function login_page(): void
             } else {
                 unset($_SESSION['pending_2fa_user_id'], $_SESSION['pending_2fa_started_at']);
                 $loginValue = normalize_user_login((string) ($_POST['login'] ?? ''));
-                $stmt = db()->prepare('SELECT * FROM users WHERE login = ? LIMIT 1');
-                $stmt->execute([$loginValue]);
-                $user = $stmt->fetch();
+                $user = function_exists('find_user_for_church_login')
+                    ? find_user_for_church_login($loginValue, (int) $church['id'])
+                    : null;
+                if (!$user) {
+                    $stmt = db()->prepare('SELECT * FROM users WHERE login = ? LIMIT 1');
+                    $stmt->execute([$loginValue]);
+                    $user = $stmt->fetch() ?: null;
+                }
                 if ($user && password_verify((string) ($_POST['password'] ?? ''), $user['password_hash'])) {
                     if (function_exists('demo_password_login_allowed') && !demo_password_login_allowed($user)) {
                         $error = 'Демо-учётные записи открываются только через /demo/enter.';
@@ -173,7 +178,7 @@ function login_page(): void
         $joinHref = $church && function_exists('homegroup_join_base_path')
             ? homegroup_join_base_path($church)
             : '/homegroup/join';
-        echo '<p class="muted"><a href="/forgot-password">Восстановить пароль</a> · <a href="' . e($joinHref) . '">Заявка в домашнюю группу</a> · <a href="' . e(public_prayer_request_path($church)) . '">Молитвенная нужда</a> · <a href="' . e(public_miracle_share_path($church)) . '">Свидетельство</a></p>';
+        echo '<p class="muted"><a href="' . e(app_path('/forgot-password')) . '">Восстановить пароль</a> · <a href="' . e($joinHref) . '">Заявка в домашнюю группу</a> · <a href="' . e(public_prayer_request_path($church)) . '">Молитвенная нужда</a> · <a href="' . e(public_miracle_share_path($church)) . '">Свидетельство</a></p>';
         echo '<p class="muted"><a href="' . e(platform_path('/')) . '">Выбрать другую церковь</a></p>';
         echo render_social_login_buttons('login');
     }

@@ -17,14 +17,23 @@ function login_from_email(string $email): string
     return normalize_user_login($local !== false ? $local : $email);
 }
 
-function unique_user_login(string $base, ?int $excludeUserId = null): string
+/**
+ * Pick a free login inside one church (or on the platform when $churchId is null).
+ * Logins are isolated per church: the same login may exist in another tenant.
+ */
+function unique_user_login(string $base, ?int $excludeUserId = null, ?int $churchId = null): string
 {
     $base = normalize_user_login($base);
     $login = $base;
     $suffix = 2;
     while (true) {
         $params = [$login];
-        $sql = 'SELECT id FROM users WHERE login = ?';
+        if ($churchId !== null && $churchId > 0) {
+            $sql = 'SELECT id FROM users WHERE login = ? AND church_id = ?';
+            $params[] = $churchId;
+        } else {
+            $sql = 'SELECT id FROM users WHERE login = ? AND church_id IS NULL';
+        }
         if ($excludeUserId !== null) {
             $sql .= ' AND id <> ?';
             $params[] = $excludeUserId;
@@ -35,6 +44,33 @@ function unique_user_login(string $base, ?int $excludeUserId = null): string
         $tail = '-' . $suffix++;
         $login = mb_substr($base, 0, 80 - mb_strlen($tail)) . $tail;
     }
+}
+
+/**
+ * Resolve an account for password/login form inside a church tenant.
+ * Super-admins may enter any church with their platform login.
+ *
+ * @return array<string,mixed>|null
+ */
+function find_user_for_church_login(string $login, int $churchId): ?array
+{
+    $login = normalize_user_login($login);
+    if ($login === '' || $churchId <= 0) {
+        return null;
+    }
+
+    $user = fetch_one(
+        'SELECT * FROM users WHERE login = ? AND church_id = ? LIMIT 1',
+        [$login, $churchId]
+    );
+    if ($user) {
+        return $user;
+    }
+
+    return fetch_one(
+        'SELECT * FROM users WHERE login = ? AND role = "super_admin" LIMIT 1',
+        [$login]
+    );
 }
 
 /**
@@ -108,17 +144,29 @@ function email_owned_by_other(string $email, int $userId): bool
 }
 
 /**
- * All CRM accounts that share an email (across churches).
+ * CRM accounts that share an email.
+ * When $churchId is set, only that church (tenant isolation for password reset).
  *
  * @return list<array<string,mixed>>
  */
-function find_users_by_email(string $email): array
+function find_users_by_email(string $email, ?int $churchId = null): array
 {
     $email = trim($email);
     if ($email === '') {
         return [];
     }
     $email = normalize_account_email($email);
+
+    if ($churchId !== null && $churchId > 0) {
+        return fetch_all(
+            'SELECT u.*, c.name AS church_name, c.city AS church_city, c.slug AS church_slug
+             FROM users u
+             LEFT JOIN churches c ON c.id = u.church_id
+             WHERE u.email = ? AND u.church_id = ?
+             ORDER BY u.id',
+            [$email, $churchId]
+        );
+    }
 
     return fetch_all(
         'SELECT u.*, c.name AS church_name, c.city AS church_city, c.slug AS church_slug
@@ -855,6 +903,16 @@ function queue_email_notification(?int $userId, string $toEmail, string $subject
 
     db()->prepare('INSERT INTO email_notifications (user_id, to_email, subject, body, type, status) VALUES (?, ?, ?, ?, ?, "pending")')
         ->execute([$userId, $toEmail, $subject, $body, $type]);
+    $id = (int) db()->lastInsertId();
+    // Password reset and similar auth mail must leave the box without waiting for cron.
+    if (
+        $id > 0
+        && function_exists('email_notification_types_dispatch_immediately')
+        && in_array($type, email_notification_types_dispatch_immediately(), true)
+        && function_exists('email_notification_dispatch_one')
+    ) {
+        email_notification_dispatch_one($id);
+    }
 }
 
 function notify_role_change(array $target, string $role): void
@@ -881,7 +939,7 @@ function create_member_account_for_person(array $person, string $email, ?string 
         throw new InvalidArgumentException('Почта уже используется другим пользователем в этой церкви');
     }
 
-    $login = unique_user_login($login ?: login_from_email($email));
+    $login = unique_user_login($login ?: login_from_email($email), null, $churchId > 0 ? $churchId : null);
     $passwordHash = password_hash($password ?? bin2hex(random_bytes(24)), PASSWORD_DEFAULT);
     db()->prepare('INSERT INTO users (name, login, email, password_hash, role, church_id, group_id) VALUES (?, ?, ?, ?, "member", ?, ?)')
         ->execute([
@@ -1604,7 +1662,7 @@ function role_invite_page(): void
     }
 
     $loginHref = function_exists('app_path') ? app_path('/login') : '/login';
-    $forgotHref = '/forgot-password';
+    $forgotHref = function_exists('app_path') ? app_path('/forgot-password') : '/forgot-password';
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
@@ -1628,7 +1686,11 @@ function role_invite_page(): void
         } elseif (mb_strlen($password) < 8) {
             $error = 'Пароль должен быть не короче 8 символов.';
         } else {
-            $login = unique_user_login($login !== '' ? $login : login_from_email($email));
+            $login = unique_user_login(
+                $login !== '' ? $login : login_from_email($email),
+                null,
+                (int) $context['church_id']
+            );
             $pdo = db();
             $pdo->beginTransaction();
             try {
@@ -1741,26 +1803,33 @@ function church_personal_data_consent_text(?int $churchId): string
 
 function forgot_password_page(): void
 {
+    $church = function_exists('current_church') ? current_church() : null;
+    if (!$church) {
+        if (function_exists('redirect_legacy_crm_to_default_church')) {
+            redirect_legacy_crm_to_default_church('/forgot-password', (string) ($_SERVER['QUERY_STRING'] ?? ''));
+        }
+        redirect('/login');
+    }
+    $churchId = (int) ($church['id'] ?? 0);
+    $loginHref = function_exists('app_path') ? app_path('/login') : '/login';
+    $brandCity = trim((string) ($church['city'] ?? ''));
+    if ($brandCity === '') {
+        $brandCity = (string) ($church['name'] ?? '');
+    }
+
     $message = null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
-        $message = 'Если почта есть в системе, мы отправили ссылку восстановления.';
-        if (throttle_action('forgot-password:' . ($_SERVER['REMOTE_ADDR'] ?? 'local'), 5, 600)) {
+        $message = 'Если почта есть в этой церкви, мы отправили ссылку восстановления.';
+        if (throttle_action('forgot-password:' . $churchId . ':' . ($_SERVER['REMOTE_ADDR'] ?? 'local'), 5, 600)) {
             $email = normalize_account_email((string) ($_POST['email'] ?? ''));
-            // One inbox may own accounts in several churches — send a reset per account.
-            foreach (find_users_by_email($email) as $user) {
+            // Tenant isolation: only the account in the current church.
+            foreach (find_users_by_email($email, $churchId) as $user) {
                 $token = bin2hex(random_bytes(24));
                 db()->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 2 HOUR))')
                     ->execute([(int) $user['id'], hash('sha256', $token)]);
                 $url = public_url('/reset-password?token=' . urlencode($token));
-                $churchLabel = trim((string) ($user['church_city'] ?? ''));
-                if ($churchLabel === '') {
-                    $churchLabel = trim((string) ($user['church_name'] ?? ''));
-                }
-                if ($churchLabel === '' && function_exists('church_public_label') && !empty($user['church_id'])) {
-                    $church = function_exists('find_church_by_id') ? find_church_by_id((int) $user['church_id']) : null;
-                    $churchLabel = $church ? church_public_label($church) : '';
-                }
+                $churchLabel = $brandCity;
                 $subject = $churchLabel !== ''
                     ? 'Восстановление пароля CRM — ' . $churchLabel
                     : 'Восстановление пароля CRM';
@@ -1769,16 +1838,25 @@ function forgot_password_page(): void
                     : "Логин: {$user['login']}.\nОткройте ссылку для смены пароля: {$url}";
                 queue_email_notification((int) $user['id'], $email, $subject, $body, 'password_reset');
                 audit('password_reset_requested', 'user', (int) $user['id'], [
-                    'church_id' => (int) ($user['church_id'] ?? 0),
+                    'church_id' => $churchId,
                 ]);
             }
         }
     }
 
     public_page_header('Восстановление пароля');
-    echo '<form class="login-card" method="post"><h1>Восстановление пароля</h1>';
-    if ($message) echo '<div class="flash">' . e($message) . '</div>';
-    echo csrf_field() . '<label>Почта<input name="email" type="email" required></label><button class="primary full">Отправить ссылку</button><p class="muted"><a href="/login">Вернуться ко входу</a></p></form>';
+    echo '<form class="login-card" method="post">';
+    if (function_exists('render_brand_markup')) {
+        echo render_brand_markup(['variant' => 'hero', 'subtitle' => $brandCity !== '' ? $brandCity : null]);
+    }
+    echo '<h1>Восстановление пароля</h1>';
+    if ($message) {
+        echo '<div class="flash">' . e($message) . '</div>';
+    }
+    echo csrf_field()
+        . '<label>Почта<input name="email" type="email" required autocomplete="email"></label>'
+        . '<button class="primary full">Отправить ссылку</button>'
+        . '<p class="muted"><a href="' . e($loginHref) . '">Вернуться ко входу</a></p></form>';
     public_page_footer();
 }
 function reset_password_page(): void
@@ -3077,7 +3155,11 @@ function handle_account_post(string $path, string $method, array $user): void
             ajax_redirect('/profile', 'Укажите корректный email');
         }
         if (email_owned_by_other($email, (int) $user['id'])) ajax_redirect('/profile', 'Почта уже используется другим пользователем в этой церкви');
-        $login = unique_user_login((string) ($_POST['login'] ?? login_from_email($email)), (int) $user['id']);
+        $login = unique_user_login(
+            (string) ($_POST['login'] ?? login_from_email($email)),
+            (int) $user['id'],
+            (int) ($user['church_id'] ?? 0) ?: null
+        );
         db()->prepare('UPDATE users SET name = ?, login = ?, email = ? WHERE id = ?')->execute([trim((string) $_POST['name']), $login, $email, $user['id']]);
         audit('profile_update', 'user', (int) $user['id']);
         ajax_redirect('/profile', 'Профиль обновлен');
@@ -3182,7 +3264,11 @@ function handle_account_post(string $path, string $method, array $user): void
             ajax_redirect(user_admin_return_path($target), 'Укажите корректный email');
         }
         if (email_owned_by_other($email, (int) $target['id'])) ajax_redirect(user_admin_return_path($target), 'Почта уже используется другим пользователем в этой церкви');
-        $login = unique_user_login((string) ($_POST['login'] ?? login_from_email($email)), (int) $target['id']);
+        $login = unique_user_login(
+            (string) ($_POST['login'] ?? login_from_email($email)),
+            (int) $target['id'],
+            (int) ($target['church_id'] ?? 0) ?: null
+        );
         db()->prepare('UPDATE users SET name = ?, login = ?, email = ?, role = ?, group_id = ? WHERE id = ?')
             ->execute([trim((string) $_POST['name']), $login, $email, $role, $groupId, (int) $target['id']]);
         $person = fetch_one('SELECT id, group_id FROM people WHERE user_id = ? LIMIT 1', [(int) $target['id']]);

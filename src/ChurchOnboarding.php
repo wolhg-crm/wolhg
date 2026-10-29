@@ -382,9 +382,7 @@ function consume_church_invite(string $token, array $input): array
         return ['ok' => false, 'error' => $normalized['error'], 'user_id' => null, 'church_id' => null, 'slug' => null];
     }
 
-    // Same email may already exist in another church — that is allowed.
-    // A new church always gets a new church_id, so (email, church_id) stays unique.
-    $login = unique_user_login($normalized['login']);
+    // Same email/login may already exist in another church — that is allowed.
     $slug = unique_church_slug($normalized['slug_base']);
     if (!church_slug_is_valid($slug)) {
         return ['ok' => false, 'error' => 'Не удалось подобрать корректный адрес церкви (slug). Укажите другой slug.', 'user_id' => null, 'church_id' => null, 'slug' => null];
@@ -412,6 +410,7 @@ function consume_church_invite(string $token, array $input): array
         $pdo->prepare('INSERT INTO churches (name, city, slug, timezone) VALUES (?, ?, ?, ?)')
             ->execute([$normalized['church_name'], $normalized['city'], $slug, $normalized['timezone']]);
         $churchId = (int) $pdo->lastInsertId();
+        $login = unique_user_login($normalized['login'], null, $churchId);
 
         $pdo->prepare(
             'INSERT INTO users (name, login, email, password_hash, role, church_id, group_id)

@@ -216,6 +216,13 @@ function social_start(string $provider, string $mode = 'login', string $returnTo
 
     $state = bin2hex(random_bytes(24));
     $codeVerifier = $provider === 'vk' ? social_pkce_verifier() : null;
+    // Remember tenant so callback can resolve the church-local CRM account.
+    if ($mode === 'login' && function_exists('current_church_id')) {
+        $oauthChurchId = current_church_id();
+        if ($oauthChurchId !== null && $oauthChurchId > 0) {
+            $_SESSION['social_oauth_church_id'] = $oauthChurchId;
+        }
+    }
     db()->prepare('INSERT INTO oauth_states (state, provider, mode, user_id, return_to, code_verifier, expires_at) VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))')
         ->execute([$state, $provider, $mode, $user['id'] ?? null, $returnTo, $codeVerifier]);
 
@@ -583,9 +590,12 @@ function social_callback(): never
             flash('Привязка доступна только после входа.');
             redirect('/login');
         }
-        $owner = fetch_one('SELECT user_id FROM social_identities WHERE provider = ? AND external_user_id = ? LIMIT 1', [$provider, $profile['external_user_id']]);
+        $linkUser = fetch_one('SELECT id, church_id FROM users WHERE id = ? LIMIT 1', [$userId]);
+        $linkChurchId = (int) ($linkUser['church_id'] ?? 0);
+        // Same social profile may be linked in another church; block only inside this church.
+        $owner = social_find_identity_for_church($provider, (string) $profile['external_user_id'], $linkChurchId > 0 ? $linkChurchId : null);
         if ($owner && (int) $owner['user_id'] !== $userId) {
-            flash('Этот профиль уже привязан к другой учетной записи.');
+            flash('Этот профиль уже привязан к другой учетной записи в этой церкви.');
             redirect('/profile');
         }
         social_save_identity($userId, $provider, $profile);
@@ -601,9 +611,37 @@ function social_callback(): never
         redirect('/profile');
     }
 
-    $identity = fetch_one('SELECT * FROM social_identities WHERE provider = ? AND external_user_id = ? LIMIT 1', [$provider, $profile['external_user_id']]);
+    $oauthChurchId = (int) ($_SESSION['social_oauth_church_id'] ?? 0);
+    unset($_SESSION['social_oauth_church_id']);
+    if ($oauthChurchId <= 0 && function_exists('current_church_id')) {
+        $oauthChurchId = (int) (current_church_id() ?? 0);
+    }
+    $identity = social_find_identity_for_church(
+        $provider,
+        (string) $profile['external_user_id'],
+        $oauthChurchId > 0 ? $oauthChurchId : null
+    );
     if (!$identity) {
-        flash('Профиль сервиса найден, но еще не привязан к аккаунту CRM. Войдите по логину и привяжите его в профиле.');
+        flash('Профиль сервиса найден, но еще не привязан к аккаунту CRM этой церкви. Войдите по логину и привяжите его в профиле.');
+        $loginPath = '/login';
+        if ($oauthChurchId > 0 && function_exists('find_church_by_id')) {
+            $oauthChurch = find_church_by_id($oauthChurchId);
+            $slug = trim((string) ($oauthChurch['slug'] ?? ''));
+            if ($slug !== '') {
+                $loginPath = '/' . rawurlencode($slug) . '/login';
+            }
+        }
+        redirect($loginPath);
+    }
+
+    $account = fetch_one('SELECT * FROM users WHERE id = ? LIMIT 1', [(int) $identity['user_id']]);
+    if (
+        $account
+        && $oauthChurchId > 0
+        && function_exists('user_can_access_church')
+        && !user_can_access_church($account, $oauthChurchId)
+    ) {
+        flash('Этот аккаунт не относится к выбранной церкви.');
         redirect('/login');
     }
 
@@ -614,8 +652,49 @@ function social_callback(): never
 
     session_regenerate_id(true);
     $_SESSION['user_id'] = (int) $identity['user_id'];
-    audit('social_login', 'user', (int) $identity['user_id'], ['provider' => $provider]);
+    audit('social_login', 'user', (int) $identity['user_id'], [
+        'provider' => $provider,
+        'church_id' => $oauthChurchId,
+    ]);
     redirect(social_safe_return_to((string) ($state['return_to'] ?? ''), '/'));
+}
+
+/**
+ * Find a social identity bound to a CRM user in the given church.
+ * Same external profile may be linked to different churches independently.
+ *
+ * @return array<string,mixed>|null
+ */
+function social_find_identity_for_church(string $provider, string $externalUserId, ?int $churchId): ?array
+{
+    if ($churchId !== null && $churchId > 0) {
+        $row = fetch_one(
+            'SELECT si.*
+             FROM social_identities si
+             INNER JOIN users u ON u.id = si.user_id
+             WHERE si.provider = ? AND si.external_user_id = ? AND u.church_id = ?
+             LIMIT 1',
+            [$provider, $externalUserId, $churchId]
+        );
+        if ($row) {
+            return $row;
+        }
+
+        // Super-admin linked identity may enter any tenant.
+        return fetch_one(
+            'SELECT si.*
+             FROM social_identities si
+             INNER JOIN users u ON u.id = si.user_id
+             WHERE si.provider = ? AND si.external_user_id = ? AND u.role = "super_admin"
+             LIMIT 1',
+            [$provider, $externalUserId]
+        );
+    }
+
+    return fetch_one(
+        'SELECT * FROM social_identities WHERE provider = ? AND external_user_id = ? LIMIT 1',
+        [$provider, $externalUserId]
+    );
 }
 
 function social_provider_icon_svg(string $provider): string

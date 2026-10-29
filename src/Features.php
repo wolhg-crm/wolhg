@@ -830,7 +830,6 @@ function handle_feature_post(string $path, string $method, array $user): void
             if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 ajax_redirect('/admin', 'Укажите корректный email');
             }
-            $login = unique_user_login(login_from_email($email));
             $churchId = (int) ($_POST['church_id'] ?? 0);
             if ($role === 'super_admin') {
                 $churchId = $churchId > 0 ? $churchId : ((int) ($user['church_id'] ?? 0) ?: null);
@@ -838,6 +837,7 @@ function handle_feature_post(string $path, string $method, array $user): void
                 ajax_redirect('/admin', 'Укажите церковь для пользователя');
             }
             $churchScope = is_int($churchId) && $churchId > 0 ? $churchId : null;
+            $login = unique_user_login(login_from_email($email), null, $churchScope);
             if (user_email_taken_in_church($email, $churchScope)) {
                 ajax_redirect('/admin', 'Почта уже используется другим пользователем в этой церкви');
             }
