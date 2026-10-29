@@ -129,6 +129,16 @@ function migrate_effect_probe_map(): array
             'table' => 'users',
             'index' => 'uniq_users_email_church',
         ],
+        '044_users_login_unique_per_church.sql' => [
+            'type' => 'index',
+            'table' => 'users',
+            'index' => 'uniq_users_login_church',
+        ],
+        '045_social_identity_per_church.sql' => [
+            'type' => 'index',
+            'table' => 'social_identities',
+            'index' => 'idx_social_provider_external',
+        ],
     ];
 }
 
@@ -284,6 +294,57 @@ function migrate_apply_users_email_unique_per_church(PDO $pdo): void
 }
 
 /**
+ * Drop single-column UNIQUE on users.login (uniq_users_login or inline `login`).
+ */
+function migrate_drop_single_column_unique_login(PDO $pdo): void
+{
+    $stmt = $pdo->query(
+        "SELECT INDEX_NAME,
+                COUNT(*) AS col_count,
+                SUM(COLUMN_NAME = 'login') AS login_cols
+         FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'users'
+           AND NON_UNIQUE = 0
+           AND INDEX_NAME <> 'PRIMARY'
+         GROUP BY INDEX_NAME"
+    );
+    if (!$stmt) {
+        return;
+    }
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ((int) ($row['col_count'] ?? 0) === 1 && (int) ($row['login_cols'] ?? 0) === 1) {
+            $name = str_replace('`', '``', (string) $row['INDEX_NAME']);
+            $pdo->exec('ALTER TABLE users DROP INDEX `' . $name . '`');
+        }
+    }
+}
+
+/**
+ * Idempotent: login uniqueness becomes (login, church_id).
+ */
+function migrate_apply_users_login_unique_per_church(PDO $pdo): void
+{
+    migrate_drop_single_column_unique_login($pdo);
+    if (!migrate_index_exists($pdo, 'users', 'uniq_users_login_church')) {
+        $pdo->exec('ALTER TABLE users ADD UNIQUE KEY uniq_users_login_church (login, church_id)');
+    }
+}
+
+/**
+ * Idempotent: allow the same social profile on different church accounts.
+ */
+function migrate_apply_social_identity_per_church(PDO $pdo): void
+{
+    if (migrate_index_exists($pdo, 'social_identities', 'uniq_social_provider_user')) {
+        $pdo->exec('ALTER TABLE social_identities DROP INDEX uniq_social_provider_user');
+    }
+    if (!migrate_index_exists($pdo, 'social_identities', 'idx_social_provider_external')) {
+        $pdo->exec('ALTER TABLE social_identities ADD INDEX idx_social_provider_external (provider, external_user_id)');
+    }
+}
+
+/**
  * Execute migration SQL statements without requiring a fresh schema_migrations row.
  * Used for self-heal when a version was recorded but the effect is missing.
  */
@@ -295,9 +356,14 @@ function migrate_exec_file(PDO $pdo, string $version): void
     }
 
     // DDL index swaps are not safely re-run as raw SQL after a partial apply.
-    if ($version === '043_users_email_unique_per_church.sql') {
+    $special = [
+        '043_users_email_unique_per_church.sql' => 'migrate_apply_users_email_unique_per_church',
+        '044_users_login_unique_per_church.sql' => 'migrate_apply_users_login_unique_per_church',
+        '045_social_identity_per_church.sql' => 'migrate_apply_social_identity_per_church',
+    ];
+    if (isset($special[$version])) {
         try {
-            migrate_apply_users_email_unique_per_church($pdo);
+            $special[$version]($pdo);
             migrate_record($pdo, $version);
         } catch (Throwable $e) {
             throw new RuntimeException('Migration failed: ' . $version . ' — ' . $e->getMessage(), 0, $e);
