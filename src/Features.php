@@ -275,9 +275,33 @@ function marital_status_select_markup(string $name, ?string $selected = null): s
     return $html;
 }
 
+/**
+ * Fields editable via /person-field-update (inline pencil on the card).
+ *
+ * @return list<string>
+ */
+function person_inline_editable_fields(): array
+{
+    return [
+        'full_name',
+        'phone',
+        'telegram',
+        'email',
+        'address',
+        'birth_date',
+        'marital_status',
+        'first_visit_date',
+        'repentance_date',
+        'baptism_date',
+        'membership_date',
+        'ministry',
+    ];
+}
+
 function person_change_field_label(string $field): string
 {
     return match ($field) {
+        'full_name' => 'Имя и фамилия',
         'phone' => 'Телефон',
         'telegram' => 'Telegram',
         'email' => 'Email',
@@ -324,6 +348,18 @@ function parse_person_field_value(string $field, ?string $raw): array
     $value = trim((string) $raw);
 
     return match ($field) {
+        'full_name' => (static function () use ($value): array {
+            if ($value === '') {
+                return ['ok' => false, 'error' => 'Укажите имя и фамилию'];
+            }
+            $normalized = mb_substr(preg_replace('/\s+/u', ' ', $value) ?? $value, 0, 190);
+            $normalized = trim($normalized);
+            if ($normalized === '') {
+                return ['ok' => false, 'error' => 'Укажите имя и фамилию'];
+            }
+
+            return ['ok' => true, 'value' => $normalized];
+        })(),
         'phone' => (static function () use ($value): array {
             if ($value === '' || $value === '+7' || $value === '+7 ') {
                 return ['ok' => true, 'value' => null];
@@ -951,7 +987,7 @@ function handle_feature_post(string $path, string $method, array $user): void
         require_action($user, 'edit_people');
         $id = (int) ($_POST['id'] ?? 0);
         $field = (string) ($_POST['field'] ?? '');
-        $allowed = ['phone', 'telegram', 'email', 'address', 'birth_date', 'marital_status', 'first_visit_date', 'repentance_date', 'baptism_date', 'membership_date', 'ministry'];
+        $allowed = person_inline_editable_fields();
         if (!in_array($field, $allowed, true)) {
             json_response(['ok' => false, 'error' => 'Неизвестное поле'], 422);
         }
@@ -966,7 +1002,7 @@ function handle_feature_post(string $path, string $method, array $user): void
         $old = fetch_one('SELECT ' . $field . ' FROM people WHERE id = ?', [$id]) ?: [];
         db()->prepare('UPDATE people SET ' . $field . ' = ? WHERE id = ?')->execute([$parsed['value'], $id]);
         log_person_changes($id, (int) $user['id'], $old, [$field => $parsed['value']]);
-        audit('person_field_update', 'person', $id);
+        audit('person_field_update', 'person', $id, ['field' => $field]);
         $meta = person_field_presentation($field, $parsed['value']);
         json_response([
             'ok' => true,
@@ -984,13 +1020,22 @@ function handle_feature_post(string $path, string $method, array $user): void
         $person = scoped_person($user, $id);
         if (!$person) ajax_redirect('/care', 'Карточка не найдена или недоступна');
         $old = fetch_one(
-            'SELECT phone, telegram, birth_date, marital_status, first_visit_date, repentance_date, baptism_date, membership_date, ministry, training_stage, is_potential_leader, notes, sensitive_notes_encrypted, spiritual_stage_id, retention_until FROM people WHERE id = ?',
+            'SELECT full_name, phone, telegram, birth_date, marital_status, first_visit_date, repentance_date, baptism_date, membership_date, ministry, training_stage, is_potential_leader, notes, sensitive_notes_encrypted, spiritual_stage_id, retention_until FROM people WHERE id = ?',
             [$id]
         ) ?: [];
         if (array_key_exists('sensitive_notes', $_POST) && can_edit_person_field($user, 'sensitive_notes')) {
             $encrypted = trim((string) $_POST['sensitive_notes']) !== '' ? encrypt_sensitive_note((string) $_POST['sensitive_notes']) : null;
         } else {
             $encrypted = $old['sensitive_notes_encrypted'] ?? null;
+        }
+        if (array_key_exists('full_name', $_POST)) {
+            $parsedName = parse_person_field_value('full_name', $_POST['full_name'] ?? null);
+            if (!$parsedName['ok']) {
+                ajax_redirect('/person?id=' . $id, (string) $parsedName['error']);
+            }
+            $fullName = $parsedName['value'];
+        } else {
+            $fullName = $old['full_name'] ?? '';
         }
         $phone = array_key_exists('phone', $_POST) ? ChurchCare\normalize_phone($_POST['phone'] ?? null) : ($old['phone'] ?? null);
         $telegram = array_key_exists('telegram', $_POST) ? ChurchCare\normalize_telegram($_POST['telegram'] ?? null) : ($old['telegram'] ?? null);
@@ -1018,6 +1063,7 @@ function handle_feature_post(string $path, string $method, array $user): void
             $maritalStatus = $old['marital_status'] ?? null;
         }
         $new = [
+            'full_name' => $fullName,
             'phone' => $phone,
             'telegram' => $telegram,
             'birth_date' => $dates['birth_date'],
@@ -1035,8 +1081,9 @@ function handle_feature_post(string $path, string $method, array $user): void
             'retention_until' => $_POST['retention_until'] ?: null,
         ];
         db()->prepare(
-            'UPDATE people SET phone = ?, telegram = ?, birth_date = ?, marital_status = ?, first_visit_date = ?, repentance_date = ?, baptism_date = ?, membership_date = ?, ministry = ?, training_stage = ?, is_potential_leader = ?, notes = ?, sensitive_notes_encrypted = ?, spiritual_stage_id = ?, retention_until = ? WHERE id = ?'
+            'UPDATE people SET full_name = ?, phone = ?, telegram = ?, birth_date = ?, marital_status = ?, first_visit_date = ?, repentance_date = ?, baptism_date = ?, membership_date = ?, ministry = ?, training_stage = ?, is_potential_leader = ?, notes = ?, sensitive_notes_encrypted = ?, spiritual_stage_id = ?, retention_until = ? WHERE id = ?'
         )->execute([
+            $new['full_name'],
             $new['phone'],
             $new['telegram'],
             $new['birth_date'],

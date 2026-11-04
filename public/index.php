@@ -486,7 +486,10 @@ function person_page(array $user): void
     );
     $attendance = fetch_all('SELECT m.meeting_date, m.topic, a.status FROM attendance a JOIN meetings m ON m.id = a.meeting_id WHERE a.person_id = ? ORDER BY m.meeting_date DESC LIMIT 12', [$id]);
     $canEdit = can_edit_group_data($user);
-    $stages = fetch_all('SELECT * FROM spiritual_stages WHERE church_id = ? ORDER BY sort_order, name', [$user['church_id']]);
+    $stagesChurchId = (int) (effective_scope_church_id($user) ?? ($user['church_id'] ?? 0));
+    $stages = $stagesChurchId > 0
+        ? fetch_all('SELECT * FROM spiritual_stages WHERE church_id = ? ORDER BY sort_order, name', [$stagesChurchId])
+        : [];
     $stageNames = [];
     foreach ($stages as $stage) {
         $stageNames[(int) $stage['id']] = (string) $stage['name'];
@@ -505,7 +508,15 @@ function person_page(array $user): void
 
     echo '<section class="person-hero panel"><div class="person-hero-main"><span class="dot ' . e($careLevel) . '" title="' . e($careLabel) . '"></span><div>';
     echo '<p class="eyebrow">' . e(($person['church_name'] ?? '') . ' · ' . $person['group_name']) . '</p>';
-    echo '<h2>' . e($person['full_name']) . '</h2>';
+    if ($canEdit) {
+        $nameMeta = person_field_presentation('full_name', $person['full_name'] ?? null);
+        echo '<div class="person-hero-name detail-field" data-field="full_name" data-person-id="' . $id . '" data-input="text" data-value="' . e($nameMeta['edit_value']) . '">';
+        echo '<div class="detail-read"><h2 class="detail-value">' . e($nameMeta['display']) . '</h2>';
+        echo '<button type="button" class="detail-edit-btn" title="Редактировать" aria-label="Редактировать: Имя и фамилия">✎</button></div>';
+        echo '<p class="detail-error" hidden></p></div>';
+    } else {
+        echo '<h2>' . e($person['full_name']) . '</h2>';
+    }
     echo '<p class="muted">' . e($careLabel);
     if ($person['spiritual_stage_name']) {
         echo ' · ' . e($person['spiritual_stage_name']);
@@ -544,6 +555,7 @@ function person_page(array $user): void
     echo '<article class="panel"><h2>Путь и рост</h2>';
     if ($canEdit) {
         echo '<form method="post" action="' . e(app_path('/person-update')) . '" class="stack person-edit-form">' . csrf_field() . '<input type="hidden" name="id" value="' . $id . '">';
+        echo '<label>Имя и фамилия<input name="full_name" required maxlength="190" autocomplete="name" value="' . e((string) ($person['full_name'] ?? '')) . '"></label>';
         echo '<div class="form-grid">';
         echo '<label>Дата рождения<input name="birth_date" type="date" value="' . e((string) ($person['birth_date'] ?? '')) . '"></label>';
         echo '<label>Семейное положение' . marital_status_select_markup('marital_status', $person['marital_status'] ?? null) . '</label>';

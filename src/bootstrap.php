@@ -306,6 +306,12 @@ function person_field_presentation(string $field, ?string $value): array
     }
 
     return match ($field) {
+        'full_name' => [
+            'display' => $raw !== '' ? $raw : '—',
+            'edit_value' => $raw,
+            'href' => '',
+            'input' => 'text',
+        ],
         'email' => [
             'display' => $raw !== '' ? $raw : '—',
             'edit_value' => $raw,
@@ -957,7 +963,15 @@ function page_header(string $title, array $user): void
     html_pwa_meta();
     html_font_assets();
     echo '<link rel="stylesheet" href="' . e(asset_url('/assets/app.css')) . '"><title>' . e($title) . '</title></head>';
-    echo '<body data-vapid-public-key="' . e($webpushKey) . '"' . (geocoder_ready() && !(function_exists('demo_geocoder_allowed') && !demo_geocoder_allowed()) ? ' data-geocoder-ready="1"' : '') . '><div class="app-shell" data-ajax-shell>';
+    $churchSlug = function_exists('current_church_slug') ? current_church_slug() : null;
+    $bodyAttrs = 'data-vapid-public-key="' . e($webpushKey) . '"';
+    if (is_string($churchSlug) && $churchSlug !== '') {
+        $bodyAttrs .= ' data-church-slug="' . e($churchSlug) . '"';
+    }
+    if (geocoder_ready() && !(function_exists('demo_geocoder_allowed') && !demo_geocoder_allowed())) {
+        $bodyAttrs .= ' data-geocoder-ready="1"';
+    }
+    echo '<body ' . $bodyAttrs . '><div class="app-shell" data-ajax-shell>';
     echo '<aside class="sidebar">' . render_brand_markup([
         'href' => app_path('/'),
         'subtitle' => $brandCity !== '' ? $brandCity : null,

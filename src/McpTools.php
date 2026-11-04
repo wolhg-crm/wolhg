@@ -203,6 +203,7 @@ function mcp_tool_definitions(): array
                 'type' => 'object',
                 'properties' => [
                     'person_id' => ['type' => 'integer'],
+                    'full_name' => ['type' => 'string'],
                     'phone' => ['type' => 'string'],
                     'telegram' => ['type' => 'string'],
                     'email' => ['type' => 'string'],
@@ -655,7 +656,7 @@ function mcp_tool_update_person(array $user, array $arguments): array
     }
 
     $memberAllowed = ['phone', 'telegram', 'email', 'address'];
-    $fields = ['phone', 'telegram', 'email', 'address', 'birth_date', 'marital_status', 'first_visit_date', 'ministry', 'notes'];
+    $fields = ['full_name', 'phone', 'telegram', 'email', 'address', 'birth_date', 'marital_status', 'first_visit_date', 'ministry', 'notes'];
     $updates = [];
     $params = [];
     $changed = [];
