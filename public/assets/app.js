@@ -282,7 +282,8 @@ function crmTenantSlugFromPath(pathname) {
     const reserved = new Set([
       "login", "logout", "forgot-password", "reset-password", "account-invite", "role-invite",
       "homegroup", "join", "prayer-request", "miracle-share", "api", "social", "bot", "bots",
-      "mcp", "geocode", "assets", "uploads", "admin", "push", "preza"
+      "mcp", "geocode", "assets", "uploads", "admin", "push", "preza",
+      "person-field-update", "person-update", "knowledge-image-upload"
     ]);
     if (reserved.has(first)) return "";
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(first)) return "";
@@ -290,6 +291,36 @@ function crmTenantSlugFromPath(pathname) {
   } catch (_) {
     return "";
   }
+}
+
+/**
+ * Current church slug for API calls: prefer server-rendered body attr, else URL.
+ * Installed PWAs from the single-church era often hit root paths; tenant prefix
+ * avoids fragile 307 redirects that depend on Referer.
+ */
+function crmCurrentTenantSlug() {
+  const fromBody = String(document.body?.dataset?.churchSlug || "").trim().toLowerCase();
+  if (fromBody && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(fromBody)) {
+    return fromBody;
+  }
+  return crmTenantSlugFromPath(window.location.pathname);
+}
+
+/**
+ * Prefix a logical CRM path with /{slug} when the page is inside a church tenant.
+ * Platform-root endpoints (geocode, push, social) must keep calling without a slug.
+ */
+function crmTenantApiPath(logicalPath) {
+  const raw = String(logicalPath || "");
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  if (crmTenantSlugFromPath(path) !== "") {
+    return path;
+  }
+  const slug = crmCurrentTenantSlug();
+  if (!slug) {
+    return path;
+  }
+  return `/${slug}${path}`;
 }
 
 function requiresFullNavigation(url) {
@@ -1344,6 +1375,11 @@ document.addEventListener("blur", (event) => {
 
 function validatePersonFieldClient(field, value) {
   const trimmed = String(value || "").trim();
+  if (field === "full_name") {
+    if (trimmed === "") return "Укажите имя и фамилию";
+    if (trimmed.length > 190) return "Слишком длинное имя";
+    return null;
+  }
   if (field === "phone") {
     if (trimmed === "" || trimmed === "+7" || trimmed === "+7 ") return null;
     if (nationalPhoneDigits(trimmed).length !== 10) return "Введите корректный телефон";
@@ -1465,6 +1501,11 @@ function startPersonFieldEdit(fieldEl) {
         control.placeholder = "name@example.com";
       } else if (["birth_date", "first_visit_date", "repentance_date", "baptism_date", "membership_date"].includes(fieldEl.dataset.field)) {
         control.type = "date";
+      } else if (fieldEl.dataset.field === "full_name") {
+        control.placeholder = "Имя и фамилия";
+        control.maxLength = 190;
+        control.autocomplete = "name";
+        control.spellcheck = true;
       } else if (fieldEl.dataset.field === "address") {
         control.placeholder = "Адрес";
         control.maxLength = 255;
@@ -1542,11 +1583,12 @@ async function savePersonField(fieldEl) {
     data.set("value", value);
     data.set("_csrf", csrfToken());
 
-    const response = await fetch("/person-field-update", {
+    const response = await fetch(crmTenantApiPath("/person-field-update"), {
       method: "POST",
       credentials: "same-origin",
       headers: { ...ajaxHeaders, "X-CSRF-Token": csrfToken() },
-      body: data
+      body: data,
+      redirect: "follow"
     });
 
     const contentType = response.headers.get("Content-Type") || "";
@@ -1562,6 +1604,15 @@ async function savePersonField(fieldEl) {
     fieldEl.dataset.value = payload.edit_value || "";
     renderPersonFieldValue(fieldEl, payload.display || "—", payload.href || "");
     fieldEl.classList.remove("is-editing");
+    if (field === "full_name") {
+      const heading = document.querySelector(".topbar h1");
+      if (heading && payload.display) {
+        heading.textContent = payload.display;
+      }
+      if (payload.display) {
+        document.title = payload.display;
+      }
+    }
     showToast(payload.message || "Сохранено");
   } catch (error) {
     setPersonFieldError(fieldEl, error.message || "Не удалось сохранить поле.");
@@ -1632,11 +1683,12 @@ async function uploadKnowledgeInlineImage(fileInput) {
     const token = csrfToken();
     if (token) headers["X-CSRF-Token"] = token;
 
-    const response = await fetch("/knowledge-image-upload", {
+    const response = await fetch(crmTenantApiPath("/knowledge-image-upload"), {
       method: "POST",
       credentials: "same-origin",
       headers,
-      body: data
+      body: data,
+      redirect: "follow"
     });
 
     const contentType = response.headers.get("Content-Type") || "";

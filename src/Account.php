@@ -1891,7 +1891,15 @@ function public_page_header(string $title, array $options = []): void
     if (!empty($options['extra_head'])) {
         echo (string) $options['extra_head'];
     }
-    echo '<link rel="stylesheet" href="' . e(asset_url('/assets/app.css')) . '"><title>' . e($title) . '</title></head><body class="login-body"' . (geocoder_ready() ? ' data-geocoder-ready="1"' : '') . '>';
+    $churchSlug = function_exists('current_church_slug') ? current_church_slug() : null;
+    $bodyAttrs = 'class="login-body"';
+    if (is_string($churchSlug) && $churchSlug !== '') {
+        $bodyAttrs .= ' data-church-slug="' . e($churchSlug) . '"';
+    }
+    if (geocoder_ready()) {
+        $bodyAttrs .= ' data-geocoder-ready="1"';
+    }
+    echo '<link rel="stylesheet" href="' . e(asset_url('/assets/app.css')) . '"><title>' . e($title) . '</title></head><body ' . $bodyAttrs . '>';
 }
 
 function public_page_footer(array $options = []): void

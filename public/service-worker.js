@@ -1,4 +1,4 @@
-const CACHE_NAME = "church-care-v24";
+const CACHE_NAME = "church-care-v25";
 const ASSETS = [
   "/assets/app.css",
   "/assets/app.js",
@@ -12,6 +12,14 @@ const ASSETS = [
   "/assets/icon-512.png",
   "/assets/logo.svg"
 ];
+
+/** Shell assets must refresh quickly after multi-church / tenant API fixes. */
+const SHELL_ASSETS = new Set([
+  "/assets/app.css",
+  "/assets/app.js",
+  "/assets/app.min.css",
+  "/assets/app.min.js"
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
@@ -34,7 +42,31 @@ self.addEventListener("fetch", (event) => {
   }
 
   const isStaticAsset = url.origin === self.location.origin && ASSETS.includes(url.pathname);
-  if (!isStaticAsset) return;
+  if (!isStaticAsset && !(url.origin === self.location.origin && SHELL_ASSETS.has(url.pathname))) {
+    return;
+  }
+
+  // Network-first for app shell so installed PWAs pick up tenant/card fixes
+  // without waiting for a user to clear site data.
+  if (SHELL_ASSETS.has(url.pathname)) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(url.pathname, copy);
+              cache.put(event.request, response.clone());
+            });
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) => cached || caches.match(url.pathname))
+        )
+    );
+    return;
+  }
 
   event.respondWith(caches.match(event.request).then((cached) => {
     if (cached) return cached;
