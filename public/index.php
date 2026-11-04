@@ -234,27 +234,8 @@ function dashboard(array $user): void
         FROM home_groups g
         WHERE $groupSql AND g.is_active = 1", $groupParams) ?: [];
 
-    $churchId = effective_scope_church_id($user);
-    if ($churchId !== null && $churchId > 0) {
-        $tasks = fetch_all(
-            'SELECT t.*, p.full_name
-             FROM tasks t
-             LEFT JOIN people p ON p.id = t.person_id
-             LEFT JOIN home_groups g_task ON g_task.id = t.group_id
-             LEFT JOIN home_groups g_person ON g_person.id = p.group_id
-             WHERE t.assigned_to = ?
-               AND t.status = "open"
-               AND COALESCE(g_task.church_id, g_person.church_id) = ?
-             ORDER BY t.due_date, t.id
-             LIMIT 8',
-            [$user['id'], $churchId]
-        );
-    } else {
-        $tasks = fetch_all(
-            'SELECT t.*, p.full_name FROM tasks t LEFT JOIN people p ON p.id = t.person_id WHERE t.assigned_to = ? AND t.status = "open" ORDER BY t.due_date, t.id LIMIT 8',
-            [$user['id']]
-        );
-    }
+    $tasks = open_leader_tasks_for_user($user, 8);
+    $tasksTotal = open_leader_tasks_count_for_user($user);
     $meetings = fetch_all("SELECT m.*, g.name AS group_name FROM meetings m JOIN home_groups g ON g.id = m.group_id WHERE $groupSql AND g.is_active = 1 AND m.meeting_date BETWEEN CURDATE() AND CURDATE() + INTERVAL 7 DAY ORDER BY m.meeting_date", $groupParams);
     $newPeople = fetch_all("SELECT p.*, g.name AS group_name FROM people p JOIN home_groups g ON g.id = p.group_id WHERE $personSql AND g.is_active = 1 AND p.first_visit_date >= CURDATE() - INTERVAL 30 DAY ORDER BY p.first_visit_date DESC", $personParams);
     $radar = array_slice(array_filter(care_people($user), static fn($p) => $p['care_level'] !== 'green'), 0, 8);
@@ -268,9 +249,12 @@ function dashboard(array $user): void
     echo '<section class="grid two"><article class="panel"><div class="panel-head"><h2>Радар заботы</h2><a href="' . e(app_path('/stats')) . '">Вся аналитика</a></div>';
     if (!$radar) echo '<p class="muted">Сейчас нет явных рисков.</p>';
     foreach ($radar as $person) render_person_row($person);
-    echo '</article><article class="panel"><div class="panel-head"><h2>Задачи лидера</h2><span>' . count($tasks) . '</span></div>';
+    echo '</article><article class="panel"><div class="panel-head"><h2>Задачи лидера</h2><span>' . (int) $tasksTotal . '</span></div>';
     foreach ($tasks as $task) render_task($task);
     if (!$tasks) echo '<p class="muted">Открытых задач нет.</p>';
+    elseif ($tasksTotal > count($tasks)) {
+        echo '<p class="muted">Показаны ближайшие ' . count($tasks) . ' из ' . (int) $tasksTotal . '.</p>';
+    }
     echo '</article></section>';
 
     echo '<section class="grid two"><article class="panel"><h2>Встречи этой недели</h2>';
@@ -366,34 +350,66 @@ function group_page(array $user): void
     if (can_delete_home_group($user)) {
         $deleteForm = '<form method="post" action="' . e(app_path('/group-delete')) . '" class="inline-form">' . csrf_field() . '<input type="hidden" name="id" value="' . (int) $group['id'] . '"><button class="ghost danger" data-confirm="Удалить домашнюю группу ' . e($group['name']) . '? Группа будет закрыта и скрыта из активных списков.">Удалить</button></form>';
     }
-    echo '<section class="grid two"><article class="panel"><div class="panel-head"><div><p class="eyebrow">' . e($group['church_name']) . '</p><h2>Участники</h2></div>' . $deleteForm . '</div>';
+    $canEditGroup = can_edit_group_data($user);
+    $canMark = can_mark_attendance($user);
+    $isChurchService = !empty($group['is_church_service']);
+    echo '<section class="grid two"><article class="panel"><div class="panel-head"><div><p class="eyebrow">' . e($group['church_name'] . ($isChurchService ? ' · Воскресное собрание' : '')) . '</p><h2>Участники</h2></div>' . $deleteForm . '</div>';
     foreach (care_people($user, $id) as $person) render_person_row($person);
-    echo '</article><article class="panel"><h2>Настройки группы</h2><form method="post" action="' . e(app_path('/group-update')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="id" value="' . $id . '"><label>Название<input name="name" required value="' . e($group['name']) . '"></label><div class="form-grid"><label>Возраст<select name="age_category"><option value="">Любой</option>';
-    foreach (ChurchCare\home_group_age_categories() as $value => $label) echo '<option value="' . e($value) . '"' . (($group['age_category'] ?? '') === $value ? ' selected' : '') . '>' . e($label) . '</option>';
-    echo '</select></label><label>День недели<select name="meeting_weekday"><option value="">Любой</option>';
-    foreach (ChurchCare\home_group_weekdays() as $value => $label) echo '<option value="' . (int) $value . '"' . ((int) ($group['meeting_weekday'] ?? 0) === (int) $value ? ' selected' : '') . '>' . e($label) . '</option>';
-    echo '</select></label><label>Вместимость<input name="max_people" type="number" min="1" value="' . (int) $group['max_people'] . '"></label></div><div class="form-grid">';
-    echo render_filter_multiselect('group_types', 'Тип', ChurchCare\home_group_types(), ChurchCare\home_group_types_from_value($group['group_types'] ?? null));
-    echo '<label>С <input name="meeting_time_start" type="time" value="' . e(ChurchCare\home_group_time_hm($group['meeting_time_start'] ?? null)) . '"></label><label>До <input name="meeting_time_end" type="time" value="' . e(ChurchCare\home_group_time_hm($group['meeting_time_end'] ?? null)) . '"></label></div><div class="form-grid"><label>Короткий адрес<input name="short_address" value="' . e($group['short_address']) . '" placeholder="Метро / Город"></label><label>Лидер<select name="leader_person_id"><option value="">Не назначен</option>';
-    foreach (care_people($user, $id, 'attendance') as $person) echo '<option value="' . (int) $person['id'] . '"' . ((int) ($group['leader_person_id'] ?? 0) === (int) $person['id'] ? ' selected' : '') . '>' . e($person['full_name']) . '</option>';
-    echo '</select></label>';
-    if (function_exists('districts_for_church') && function_exists('can_assign_home_group_leader') && can_assign_home_group_leader($user)) {
-        $churchDistricts = districts_for_church((int) $group['church_id'], true);
-        echo '<label>Округ<select name="district_id"><option value="">Авто по координатам</option>';
-        foreach ($churchDistricts as $district) {
-            $did = (int) $district['id'];
-            echo '<option value="' . $did . '"' . ((int) ($group['district_id'] ?? 0) === $did ? ' selected' : '') . '>' . e((string) $district['name']) . '</option>';
-        }
+    echo '</article><article class="panel">';
+    if ($canEditGroup) {
+        echo '<h2>Настройки группы</h2><form method="post" action="' . e(app_path('/group-update')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="id" value="' . $id . '"><label>Название<input name="name" required value="' . e($group['name']) . '"></label>';
+        echo '<label class="checkbox-row"><input type="checkbox" name="is_church_service" value="1"' . ($isChurchService ? ' checked' : '') . '> Воскресное собрание / «Церковь» (учёт посещаемости общего собрания, не домашняя группа)</label>';
+        echo '<div class="form-grid"><label>Возраст<select name="age_category"><option value="">Любой</option>';
+        foreach (ChurchCare\home_group_age_categories() as $value => $label) echo '<option value="' . e($value) . '"' . (($group['age_category'] ?? '') === $value ? ' selected' : '') . '>' . e($label) . '</option>';
+        echo '</select></label><label>День недели<select name="meeting_weekday"><option value="">Любой</option>';
+        foreach (ChurchCare\home_group_weekdays() as $value => $label) echo '<option value="' . (int) $value . '"' . ((int) ($group['meeting_weekday'] ?? 0) === (int) $value ? ' selected' : '') . '>' . e($label) . '</option>';
+        echo '</select></label><label>Вместимость<input name="max_people" type="number" min="1" value="' . (int) $group['max_people'] . '"></label></div><div class="form-grid">';
+        echo render_filter_multiselect('group_types', 'Тип', ChurchCare\home_group_types(), ChurchCare\home_group_types_from_value($group['group_types'] ?? null));
+        echo '<label>С <input name="meeting_time_start" type="time" value="' . e(ChurchCare\home_group_time_hm($group['meeting_time_start'] ?? null)) . '"></label><label>До <input name="meeting_time_end" type="time" value="' . e(ChurchCare\home_group_time_hm($group['meeting_time_end'] ?? null)) . '"></label></div><div class="form-grid"><label>Короткий адрес<input name="short_address" value="' . e($group['short_address']) . '" placeholder="Метро / Город"></label><label>Лидер<select name="leader_person_id"><option value="">Не назначен</option>';
+        foreach (care_people($user, $id, 'attendance') as $person) echo '<option value="' . (int) $person['id'] . '"' . ((int) ($group['leader_person_id'] ?? 0) === (int) $person['id'] ? ' selected' : '') . '>' . e($person['full_name']) . '</option>';
         echo '</select></label>';
+        if (function_exists('districts_for_church') && function_exists('can_assign_home_group_leader') && can_assign_home_group_leader($user)) {
+            $churchDistricts = districts_for_church((int) $group['church_id'], true);
+            echo '<label>Округ<select name="district_id"><option value="">Авто по координатам</option>';
+            foreach ($churchDistricts as $district) {
+                $did = (int) $district['id'];
+                echo '<option value="' . $did . '"' . ((int) ($group['district_id'] ?? 0) === $did ? ' selected' : '') . '>' . e((string) $district['name']) . '</option>';
+            }
+            echo '</select></label>';
+        }
+        echo '</div><label>Адрес' . address_field_markup('address', $group['address']) . '</label><button class="primary">Сохранить группу</button></form>';
+        if (!(function_exists('is_demo_session') && is_demo_session())) {
+            $joinHref = function_exists('crm_public_group_join_url')
+                ? crm_public_group_join_url($id)
+                : ('/homegroup/join?group=' . $id);
+            echo '<div class="quick-actions"><a class="ghost" href="' . e($joinHref) . '" target="_blank" rel="noopener">Открыть публичную заявку</a><a class="ghost" href="' . e(public_homegroup_catalog_path(current_church())) . '" target="_blank" rel="noopener">Публичная карта</a></div>';
+        }
+    } elseif ($isChurchService) {
+        echo '<h2>Воскресное собрание</h2><p class="muted">Вы отмечаете посещаемость общего собрания. Пастырские карточки домашних групп здесь не редактируются.</p>';
     }
-    echo '</div><label>Адрес' . address_field_markup('address', $group['address']) . '</label><button class="primary">Сохранить группу</button></form>';
-    if (!(function_exists('is_demo_session') && is_demo_session())) {
-        $joinHref = function_exists('crm_public_group_join_url')
-            ? crm_public_group_join_url($id)
-            : ('/homegroup/join?group=' . $id);
-        echo '<div class="quick-actions"><a class="ghost" href="' . e($joinHref) . '" target="_blank" rel="noopener">Открыть публичную заявку</a><a class="ghost" href="' . e(public_homegroup_catalog_path(current_church())) . '" target="_blank" rel="noopener">Публичная карта</a></div>';
+    if ($canEditGroup) {
+        echo '<h2>Добавить из базы церкви</h2>';
+        echo '<p class="muted">Выберите уже существующую карточку, чтобы не создавать дубль. Человек останется и в своей основной группе.</p>';
+        $attachQ = trim((string) ($_GET['attach_q'] ?? ''));
+        echo '<form method="get" action="' . e(app_path('/group')) . '" class="stack compact">' . '<input type="hidden" name="id" value="' . $id . '"><label>Поиск<input name="attach_q" value="' . e($attachQ) . '" placeholder="Имя, телефон, email..."></label><button class="ghost">Найти</button></form>';
+        $attachCandidates = church_people_attach_candidates($user, $id, $attachQ, 40);
+        if ($attachCandidates) {
+            echo '<form method="post" action="' . e(app_path('/person-group-attach')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="group_id" value="' . $id . '"><label>Человек из базы<select name="person_id" required><option value="">— выберите —</option>';
+            foreach ($attachCandidates as $candidate) {
+                $meta = trim((string) ($candidate['group_name'] ?? ''));
+                echo '<option value="' . (int) $candidate['id'] . '">' . e((string) $candidate['full_name'] . ($meta !== '' ? ' · ' . $meta : '')) . '</option>';
+            }
+            echo '</select></label><button class="primary">Привязать к этой группе</button></form>';
+        } elseif ($attachQ !== '') {
+            echo '<p class="muted">Никого не нашли по запросу. Можно создать новую карточку ниже.</p>';
+        } else {
+            echo '<p class="muted">Введите часть имени или контакта, чтобы найти человека в базе церкви.</p>';
+        }
+        echo '<h2>Новый человек</h2><form method="post" action="' . e(app_path('/person-create')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="group_id" value="' . $id . '"><label>Имя и фамилия<input name="full_name" required></label><label>Email<input name="email" type="email"></label><label>Телефон' . phone_input('phone') . '</label><label>Telegram' . telegram_input('telegram') . '</label><label>Первое посещение<input name="first_visit_date" type="date" value="' . e(date('Y-m-d')) . '"></label><button class="primary">Создать новую карточку</button></form>';
     }
-    echo '<h2>Новый человек</h2><form method="post" action="' . e(app_path('/person-create')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="group_id" value="' . $id . '"><label>Имя и фамилия<input name="full_name" required></label><label>Email<input name="email" type="email"></label><label>Телефон' . phone_input('phone') . '</label><label>Telegram' . telegram_input('telegram') . '</label><label>Первое посещение<input name="first_visit_date" type="date" value="' . e(date('Y-m-d')) . '"></label><button class="primary">Добавить человека</button></form><h2>Новая встреча</h2><form method="post" action="' . e(app_path('/meeting-create')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="group_id" value="' . $id . '"><label>Дата<input name="meeting_date" type="date" value="' . e(date('Y-m-d')) . '" required></label><label>Тема<input name="topic" placeholder="Тема встречи"></label><button class="primary">Создать встречу</button></form>';
+    if ($canMark) {
+        echo '<h2>Новая встреча</h2><form method="post" action="' . e(app_path('/meeting-create')) . '" class="stack">' . csrf_field() . '<input type="hidden" name="group_id" value="' . $id . '"><label>Дата<input name="meeting_date" type="date" value="' . e(date('Y-m-d')) . '" required></label><label>Тема<input name="topic" placeholder="Тема встречи"></label><button class="primary">Создать встречу</button></form>';
+    }
     echo '<h2>Последние встречи</h2>';
     $meetings = fetch_all('SELECT * FROM meetings WHERE group_id = ? ORDER BY meeting_date DESC LIMIT 8', [$id]);
     foreach ($meetings as $meeting) echo '<a class="list-row" href="' . e(app_path('/meeting?id=' . (int) $meeting['id'])) . '"><strong>' . e($meeting['meeting_date']) . '</strong><span>' . e($meeting['topic']) . '</span></a>';
@@ -686,10 +702,14 @@ function person_page(array $user): void
     echo '</article></section>';
 
     echo '<section class="grid two"><article class="panel"><h2>Посещаемость</h2>';
+    $firstVisitDate = trim((string) ($person['first_visit_date'] ?? ''));
+    if ($firstVisitDate !== '') {
+        echo '<div class="list-row"><strong>' . e($firstVisitDate) . '</strong><span>Первое посещение</span></div>';
+    }
     foreach ($attendance as $row) {
         echo '<div class="list-row"><strong>' . e($row['meeting_date']) . '</strong><span>' . e($row['topic']) . ' · ' . e($row['status']) . '</span></div>';
     }
-    if (!$attendance) {
+    if ($firstVisitDate === '' && !$attendance) {
         echo '<p class="muted">Посещений пока нет.</p>';
     }
     echo '</article>';
@@ -1297,6 +1317,39 @@ if ($method === 'POST' && $path === '/person-group-add') {
     } catch (Throwable $e) {
         $message = $e instanceof InvalidArgumentException ? $e->getMessage() : 'Не удалось добавить в группу';
         ajax_redirect('/person?id=' . (int) $person['id'], $message);
+    }
+}
+if ($method === 'POST' && $path === '/person-group-attach') {
+    verify_csrf();
+    if (!can_edit_group_data($user)) {
+        ajax_redirect('/');
+    }
+    $group = scoped_group($user, (int) ($_POST['group_id'] ?? 0));
+    if (!$group) {
+        ajax_redirect('/groups', 'Группа не найдена или недоступна');
+    }
+    $personId = (int) ($_POST['person_id'] ?? 0);
+    // Person must already belong to the same church (any home group).
+    $person = fetch_one(
+        'SELECT p.* FROM people p
+         JOIN home_groups g ON g.id = p.group_id
+         WHERE p.id = ? AND p.deleted_at IS NULL AND g.church_id = ?
+         LIMIT 1',
+        [$personId, (int) $group['church_id']]
+    );
+    if (!$person) {
+        ajax_redirect('/group?id=' . (int) $group['id'], 'Карточка не найдена в этой церкви');
+    }
+    if (person_belongs_to_group($personId, (int) $group['id'])) {
+        ajax_redirect('/group?id=' . (int) $group['id'], 'Человек уже в этой группе');
+    }
+    try {
+        person_add_group_membership($personId, (int) $group['id'], false);
+        audit('person_group_attach', 'person', $personId, ['group_id' => (int) $group['id']]);
+        ajax_redirect('/group?id=' . (int) $group['id'], 'Человек привязан к группе без дубля карточки');
+    } catch (Throwable $e) {
+        $message = $e instanceof InvalidArgumentException ? $e->getMessage() : 'Не удалось привязать человека';
+        ajax_redirect('/group?id=' . (int) $group['id'], $message);
     }
 }
 if ($method === 'POST' && $path === '/person-group-remove') {
