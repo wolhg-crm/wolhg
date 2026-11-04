@@ -12,7 +12,13 @@ if (!function_exists('e')) {
 require_once __DIR__ . '/../../src/Features.php';
 
 return [
+    /**
+     * TC1: full_name is a first-class editable pastoral field (surname typos must be fixable).
+     * TC2: empty / whitespace-only names are rejected.
+     * TC3: inline editable allow-list includes full_name and stays shared with the endpoint.
+     */
     'person change labels cover registered card fields' => function (TestCase $test): void {
+        $test->assertSame('Имя и фамилия', person_change_field_label('full_name'));
         $test->assertSame('Телефон', person_change_field_label('phone'));
         $test->assertSame('Дата рождения', person_change_field_label('birth_date'));
         $test->assertSame('Семейное положение', person_change_field_label('marital_status'));
@@ -21,6 +27,29 @@ return [
         $test->assertSame('Членство', person_change_field_label('membership_date'));
         $test->assertSame('Особые заметки', person_change_field_label('sensitive_notes_encrypted'));
         $test->assertSame('Духовная воронка', person_change_field_label('spiritual_stage_id'));
+    },
+
+    'TC1-TC3: full_name parses and is in the inline editable allow-list' => function (TestCase $test): void {
+        $ok = parse_person_field_value('full_name', "  Иван   Фёдоров  ");
+        $test->assertTrue($ok['ok']);
+        $test->assertSame('Иван Фёдоров', $ok['value']);
+
+        $empty = parse_person_field_value('full_name', '   ');
+        $test->assertFalse($empty['ok']);
+        $test->assertStringContains('имя', mb_strtolower((string) $empty['error']));
+
+        $fields = person_inline_editable_fields();
+        $test->assertTrue(in_array('full_name', $fields, true));
+        $test->assertTrue(in_array('phone', $fields, true));
+        $test->assertTrue(in_array('ministry', $fields, true));
+
+        $features = file_get_contents(__DIR__ . '/../../src/Features.php');
+        $index = file_get_contents(__DIR__ . '/../../public/index.php');
+        $test->assertStringContains('person_inline_editable_fields()', $features);
+        $test->assertStringContains('data-field="full_name"', $index);
+        $test->assertStringContains('person-hero-name', $index);
+        $test->assertStringContains('name="full_name"', $index);
+        $test->assertStringContains('UPDATE people SET full_name = ?', $features);
     },
 
     'marital status options are fixed and select markup uses them' => function (TestCase $test): void {

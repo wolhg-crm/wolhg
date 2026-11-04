@@ -164,9 +164,21 @@ return [
         $test->assertFalse(is_file(__DIR__ . '/../../public/manifest.webmanifest'));
         $test->assertStringContains('send_pwa_manifest_response(current_church_slug())', $index);
         $test->assertStringContains("pwa_manifest_href(", $bootstrap);
-        $test->assertStringContains('church-care-v24', $sw);
+        $test->assertStringContains('church-care-v25', $sw);
+        $test->assertStringContains('SHELL_ASSETS', $sw);
         $test->assertStringNotContains('/manifest.webmanifest"', $sw);
         $test->assertStringNotContains('/manifest.webmanifest', $sw);
+    },
+
+    'ajax mutations use tenant-prefixed API paths for installed PWAs' => function (TestCase $test): void {
+        $js = file_get_contents(__DIR__ . '/../../public/assets/app.js');
+        $bootstrap = file_get_contents(__DIR__ . '/../../src/bootstrap.php');
+        $test->assertStringContains('function crmTenantApiPath', $js);
+        $test->assertStringContains('function crmCurrentTenantSlug', $js);
+        $test->assertStringContains('dataset?.churchSlug', $js);
+        $test->assertStringContains('data-church-slug', $bootstrap);
+        $test->assertStringContains('crmTenantApiPath("/person-field-update")', $js);
+        $test->assertStringNotContains('fetch("/person-field-update"', $js);
     },
 
     'schema ships slug deleted_at and super_admin' => function (TestCase $test): void {

@@ -62,6 +62,7 @@ test: lint
 	node tests/js/phone-mask-verify.mjs
 	node tests/js/homegroup-filters-verify.mjs
 	node tests/js/ajax-anchor-navigation-verify.mjs
+	node tests/js/crm-tenant-api-path-verify.mjs
 	node tests/js/districts-map-verify.mjs
 	node tests/js/preza-deck-verify.mjs
 

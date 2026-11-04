@@ -18,11 +18,15 @@ return [
         $test->assertStringContains("data-copy-source", $js);
         $test->assertStringContains("startPersonFieldEdit", $js);
         $test->assertStringContains("savePersonField", $js);
-        $test->assertStringContains("/person-field-update", $js);
+        $test->assertStringContains("crmTenantApiPath", $js);
+        $test->assertStringContains("crmCurrentTenantSlug", $js);
+        $test->assertStringContains('crmTenantApiPath("/person-field-update")', $js);
+        $test->assertStringContains('crmTenantApiPath("/knowledge-image-upload")', $js);
         $test->assertStringContains("payload.remove", $js);
-        $test->assertStringContains("/knowledge-image-upload", $js);
         $test->assertStringContains("uploadKnowledgeInlineImage", $js);
         $test->assertStringContains("previewKnowledgeCoverImage", $js);
+        $test->assertStringNotContains('fetch("/person-field-update"', $js);
+        $test->assertStringNotContains('fetch("/knowledge-image-upload"', $js);
     },
     "login page participates in ajax enhancement" => function (TestCase $test): void {
         $index = file_get_contents(__DIR__ . "/../../public/index.php");
@@ -51,15 +55,20 @@ return [
         $test->assertStringContains("data-options", $bootstrap);
         $test->assertStringContains("'input' => 'select'", $bootstrap);
         $test->assertStringContains("function email_href", $bootstrap);
+        $test->assertStringContains("data-church-slug", $bootstrap);
         $test->assertStringContains("/person-field-update", $features);
+        $test->assertStringContains("person_inline_editable_fields", $features);
         $test->assertStringContains("parse_person_field_value", $features);
         $test->assertStringContains("function marital_status_options", $features);
         $test->assertStringContains("function marital_status_select_markup", $features);
-        $test->assertStringContains("'birth_date', 'marital_status', 'first_visit_date', 'repentance_date', 'baptism_date', 'membership_date'", $features);
+        $test->assertStringContains("'birth_date', 'first_visit_date', 'repentance_date', 'baptism_date', 'membership_date'", $features);
+        $test->assertStringContains("'full_name'", $features);
+        $test->assertTrue(str_contains($features, "'marital_status'"));
         $test->assertStringContains(".detail-field", $css);
+        $test->assertStringContains(".person-hero-name", $css);
         $test->assertStringContains(".checkbox-row", $css);
         $test->assertStringContains('width: 20px', $css);
-        $test->assertStringContains('church-care-v24', file_get_contents(__DIR__ . "/../../public/service-worker.js"));
+        $test->assertStringContains('church-care-v25', file_get_contents(__DIR__ . "/../../public/service-worker.js"));
         $js = file_get_contents(__DIR__ . "/../../public/assets/app.js");
         $test->assertStringContains('dataset.input === "select"', $js);
         $test->assertStringContains('querySelector("input, select")', $js);
@@ -67,6 +76,8 @@ return [
         $test->assertStringContains('requiresFullNavigation', $js);
         $test->assertStringContains('payload.navigate', $js);
         $test->assertStringContains('data-yandex-addresses-json', $js);
+        $test->assertStringContains('field === "full_name"', $js);
+        $test->assertStringContains('crmTenantApiPath("/person-field-update")', $js);
         $social = file_get_contents(__DIR__ . "/../../src/Social.php");
         $test->assertStringContains('yandex-address-picker__list', $social);
         $test->assertStringContains('data-yandex-addresses-json', $social);
@@ -194,7 +205,8 @@ return [
         $test->assertStringContains("data-dismiss-pwa-install", $bootstrap);
         $test->assertStringContains("data-pwa-ready-note", $bootstrap);
         $test->assertStringContains('can_show_pwa_install', $bootstrap);
-        $test->assertStringContains('church-care-v24', $worker);
+        $test->assertStringContains('church-care-v25', $worker);
+        $test->assertStringContains('SHELL_ASSETS', $worker);
         $test->assertStringNotContains('/manifest.webmanifest', $worker);
     },
 
