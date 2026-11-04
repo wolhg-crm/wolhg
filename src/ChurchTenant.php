@@ -891,7 +891,7 @@ function crm_logical_root_segments(): array
     }
     foreach ([
         'person-create', 'person-update', 'person-delete', 'person-set-group',
-        'person-group-add', 'person-group-remove', 'person-group-primary',
+        'person-group-add', 'person-group-attach', 'person-group-remove', 'person-group-primary',
         'person-account-invite', 'person-field-update',
         'group-create', 'group-update', 'group-delete',
         'meeting-create', 'meeting-save', 'meeting-report-save',

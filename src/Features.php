@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-function roles(): array { return ['member','assistant','leader','district_leader','pastor','admin','super_admin']; }
+function roles(): array
+{
+    return ['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'];
+}
 
 function permission_actions(): array
 {
@@ -11,6 +14,7 @@ function permission_actions(): array
         'manage_church_page' => 'Публичная страница церкви (лендинг): контент, кнопки, расписание, фото',
         'manage_security' => 'Двухфакторная аутентификация',
         'edit_people' => 'Редактирование карточек людей',
+        'mark_attendance' => 'Отметка посещаемости встреч (без редактирования пастырских карточек)',
         'delete_people' => 'Удаление персональных данных',
         'manage_prayers' => 'Редактирование молитвенных нужд',
         'manage_services' => 'Планирование служений',
@@ -21,10 +25,21 @@ function permission_actions(): array
 
 function default_permission(string $role, string $action): bool
 {
-    if ($role === 'super_admin' || $role === 'admin') return true;
-    if ($role === 'pastor') return in_array($action, ['manage_security','manage_church_page','edit_people','delete_people','manage_prayers','manage_services','view_church_analytics'], true);
-    if ($role === 'district_leader') return in_array($action, ['edit_people','manage_prayers','manage_services','view_church_analytics'], true);
-    if (in_array($role, ['leader','assistant'], true)) return in_array($action, ['edit_people','manage_prayers','manage_services'], true);
+    if ($role === 'super_admin' || $role === 'admin') {
+        return true;
+    }
+    if ($role === 'pastor') {
+        return in_array($action, ['manage_security', 'manage_church_page', 'edit_people', 'mark_attendance', 'delete_people', 'manage_prayers', 'manage_services', 'view_church_analytics'], true);
+    }
+    if ($role === 'district_leader') {
+        return in_array($action, ['edit_people', 'mark_attendance', 'manage_prayers', 'manage_services', 'view_church_analytics'], true);
+    }
+    if (in_array($role, ['leader', 'assistant'], true)) {
+        return in_array($action, ['edit_people', 'mark_attendance', 'manage_prayers', 'manage_services'], true);
+    }
+    if ($role === 'attendance_taker') {
+        return $action === 'mark_attendance';
+    }
     return false;
 }
 
@@ -229,6 +244,10 @@ function person_field_permission(array $user, string $field, string $capability)
 
 function can_view_person_field(array $user, string $field): bool
 {
+    // Attendance counters for Sunday service see identity only — no pastoral notes.
+    if (($user['role'] ?? '') === 'attendance_taker') {
+        return in_array($field, ['full_name', 'phone', 'telegram', 'email'], true);
+    }
     return person_field_permission($user, $field, 'can_view');
 }
 
@@ -1210,7 +1229,27 @@ function handle_feature_post(string $path, string $method, array $user): void
         ajax_redirect('/miracles', 'Свидетельство перемещено в архив');
     }
     if ($path === '/course-pass') { verify_csrf(); $person = fetch_one('SELECT id FROM people WHERE user_id = ? AND deleted_at IS NULL LIMIT 1', [$user['id']]); if ($person) db()->prepare('INSERT INTO course_progress (person_id, lesson_id, status, passed_at) VALUES (?, ?, "passed", NOW()) ON DUPLICATE KEY UPDATE status = "passed", passed_at = NOW()')->execute([(int) $person['id'], (int) $_POST['lesson_id']]); audit('course_lesson_passed', 'lesson', (int) $_POST['lesson_id']); ajax_redirect('/courses', 'Урок отмечен'); }
-    if ($path === '/meeting-report-save') { verify_csrf(); require_action($user, 'edit_people'); $meetingId = (int) $_POST['meeting_id']; $meeting = scoped_meeting($user, $meetingId); if (!$meeting) ajax_redirect('/calendar', 'Встреча не найдена или недоступна'); $sentTo = fetch_one('SELECT u.id FROM users u JOIN home_groups g ON g.id = ? JOIN people p ON p.id = g.leader_person_id WHERE u.id = p.user_id LIMIT 1', [(int) ($meeting['group_id'] ?? 0)]); $sentToId = $sentTo['id'] ?? null; db()->prepare('INSERT INTO meeting_reports (meeting_id, submitted_by, summary, attendance_count, newcomers_count, pastor_help_needed, sent_to_user_id, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE submitted_by = VALUES(submitted_by), summary = VALUES(summary), attendance_count = VALUES(attendance_count), newcomers_count = VALUES(newcomers_count), pastor_help_needed = VALUES(pastor_help_needed), sent_to_user_id = VALUES(sent_to_user_id), sent_at = NOW()')->execute([$meetingId, $user['id'], trim((string) $_POST['summary']), (int) $_POST['attendance_count'], (int) $_POST['newcomers_count'], (int) $_POST['pastor_help_needed'], $sentToId]); if ($sentToId) db()->prepare('INSERT INTO notification_events (user_id, title, body, url, channel, status) VALUES (?, "Отчет после встречи", ?, ?, "in_app", "pending")')->execute([$sentToId, mb_substr(trim((string) $_POST['summary']), 0, 240), '/meeting-report?id=' . $meetingId]); audit('meeting_report_save', 'meeting', $meetingId); ajax_redirect('/meeting-report?id=' . $meetingId, 'Отчет отправлен'); }
+    if ($path === '/meeting-report-save') {
+        verify_csrf();
+        require_action($user, 'edit_people');
+        $meetingId = (int) $_POST['meeting_id'];
+        $meeting = scoped_meeting($user, $meetingId);
+        if (!$meeting) {
+            ajax_redirect('/calendar', 'Встреча не найдена или недоступна');
+        }
+        $notifyIds = meeting_report_notify_user_ids((int) ($meeting['group_id'] ?? 0));
+        $sentToId = $notifyIds[0] ?? null;
+        db()->prepare('INSERT INTO meeting_reports (meeting_id, submitted_by, summary, attendance_count, newcomers_count, pastor_help_needed, sent_to_user_id, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE submitted_by = VALUES(submitted_by), summary = VALUES(summary), attendance_count = VALUES(attendance_count), newcomers_count = VALUES(newcomers_count), pastor_help_needed = VALUES(pastor_help_needed), sent_to_user_id = VALUES(sent_to_user_id), sent_at = NOW()')
+            ->execute([$meetingId, $user['id'], trim((string) $_POST['summary']), (int) $_POST['attendance_count'], (int) $_POST['newcomers_count'], (int) $_POST['pastor_help_needed'], $sentToId]);
+        $body = mb_substr(trim((string) $_POST['summary']), 0, 240);
+        $url = '/meeting-report?id=' . $meetingId;
+        foreach ($notifyIds as $notifyId) {
+            db()->prepare('INSERT INTO notification_events (user_id, title, body, url, channel, status) VALUES (?, "Отчет после встречи", ?, ?, "in_app", "pending")')
+                ->execute([$notifyId, $body, $url]);
+        }
+        audit('meeting_report_save', 'meeting', $meetingId);
+        ajax_redirect('/meeting-report?id=' . $meetingId, 'Отчет отправлен');
+    }
     if ($path === '/import-people') {
         verify_csrf();
         require_action($user, 'import_data');

@@ -139,6 +139,11 @@ function migrate_effect_probe_map(): array
             'table' => 'social_identities',
             'index' => 'idx_social_provider_external',
         ],
+        '046_church_service_and_attendance_taker.sql' => [
+            'type' => 'column',
+            'table' => 'home_groups',
+            'column' => 'is_church_service',
+        ],
     ];
 }
 
@@ -345,6 +350,47 @@ function migrate_apply_social_identity_per_church(PDO $pdo): void
 }
 
 /**
+ * Idempotent: church-service flag + attendance_taker role ENUM expansion.
+ */
+function migrate_apply_church_service_and_attendance_taker(PDO $pdo): void
+{
+    if (!migrate_column_exists($pdo, 'home_groups', 'is_church_service')) {
+        $pdo->exec(
+            'ALTER TABLE home_groups
+             ADD COLUMN is_church_service TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active'
+        );
+    }
+
+    $roleEnum = "ENUM(
+        'member',
+        'attendance_taker',
+        'assistant',
+        'leader',
+        'district_leader',
+        'pastor',
+        'admin',
+        'super_admin'
+    )";
+    $usersEnum = migrate_users_role_enum($pdo);
+    if ($usersEnum !== '' && !str_contains($usersEnum, 'attendance_taker')) {
+        $pdo->exec('ALTER TABLE users MODIFY role ' . $roleEnum . " NOT NULL DEFAULT 'member'");
+    }
+    $pdo->exec('ALTER TABLE role_permissions MODIFY role ' . $roleEnum . ' NOT NULL');
+    $pdo->exec('ALTER TABLE field_permissions MODIFY role ' . $roleEnum . ' NOT NULL');
+    $pdo->exec(
+        "ALTER TABLE role_invitation_requests
+         MODIFY requested_role ENUM(
+            'attendance_taker',
+            'assistant',
+            'leader',
+            'district_leader',
+            'pastor',
+            'admin'
+         ) NOT NULL"
+    );
+}
+
+/**
  * Execute migration SQL statements without requiring a fresh schema_migrations row.
  * Used for self-heal when a version was recorded but the effect is missing.
  */
@@ -360,6 +406,7 @@ function migrate_exec_file(PDO $pdo, string $version): void
         '043_users_email_unique_per_church.sql' => 'migrate_apply_users_email_unique_per_church',
         '044_users_login_unique_per_church.sql' => 'migrate_apply_users_login_unique_per_church',
         '045_social_identity_per_church.sql' => 'migrate_apply_social_identity_per_church',
+        '046_church_service_and_attendance_taker.sql' => 'migrate_apply_church_service_and_attendance_taker',
     ];
     if (isset($special[$version])) {
         try {

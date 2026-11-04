@@ -695,6 +695,7 @@ function role_label(string $role): string
 {
     return [
         'member' => 'Участник',
+        'attendance_taker' => 'Служитель учёта посещаемости',
         'assistant' => 'Помощник лидера',
         'leader' => 'Лидер домашней группы',
         'district_leader' => 'Окружной лидер',
@@ -712,6 +713,21 @@ function can_delete(array $user): bool
 function can_edit_group_data(array $user): bool
 {
     return in_array($user['role'], ['assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'], true);
+}
+
+/**
+ * Mark meeting attendance / create meetings without pastoral card edits.
+ * Includes attendance_taker (church Sunday service counters) and regular group editors.
+ */
+function can_mark_attendance(array $user): bool
+{
+    if (can_edit_group_data($user)) {
+        return true;
+    }
+    if (($user['role'] ?? '') === 'attendance_taker') {
+        return true;
+    }
+    return function_exists('can_action') && can_action($user, 'mark_attendance');
 }
 
 function accessible_group_sql(array $user, string $alias = 'g'): array

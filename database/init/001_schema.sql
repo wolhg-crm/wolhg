@@ -59,7 +59,7 @@ CREATE TABLE users (
   login VARCHAR(80) NOT NULL,
   email VARCHAR(190) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('member','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL DEFAULT 'member',
+  role ENUM('member','attendance_taker','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL DEFAULT 'member',
   church_id INT UNSIGNED NULL,
   group_id INT UNSIGNED NULL,
   two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -133,6 +133,7 @@ CREATE TABLE home_groups (
   opened_at DATE NULL,
   closed_at DATE NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_church_service TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX (church_id),
   INDEX idx_home_groups_district (district_id)
@@ -299,7 +300,7 @@ CREATE TABLE app_settings (
 
 CREATE TABLE role_permissions (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  role ENUM('member','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL,
+  role ENUM('member','attendance_taker','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL,
   action VARCHAR(120) NOT NULL,
   allowed TINYINT(1) NOT NULL DEFAULT 0,
   UNIQUE KEY uniq_role_action (role, action)
@@ -307,7 +308,7 @@ CREATE TABLE role_permissions (
 
 CREATE TABLE field_permissions (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  role ENUM('member','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL,
+  role ENUM('member','attendance_taker','assistant','leader','district_leader','pastor','admin','super_admin') NOT NULL,
   field_name VARCHAR(120) NOT NULL,
   can_view TINYINT(1) NOT NULL DEFAULT 1,
   can_edit TINYINT(1) NOT NULL DEFAULT 0,
@@ -491,7 +492,7 @@ CREATE TABLE role_invitation_requests (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
   invited_by INT UNSIGNED NULL,
-  requested_role ENUM('assistant','leader','district_leader','pastor','admin') NOT NULL,
+  requested_role ENUM('attendance_taker','assistant','leader','district_leader','pastor','admin') NOT NULL,
   church_id INT UNSIGNED NULL,
   group_id INT UNSIGNED NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',

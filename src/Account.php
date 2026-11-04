@@ -297,6 +297,7 @@ function role_rank(string $role): int
 {
     return [
         'member' => 10,
+        'attendance_taker' => 15,
         'assistant' => 20,
         'leader' => 30,
         'district_leader' => 40,
@@ -314,12 +315,12 @@ function role_rank(string $role): int
 function roles_assignable_by(string $editorRole): array
 {
     return match ($editorRole) {
-        'leader' => ['member', 'assistant'],
-        'district_leader' => ['member', 'assistant', 'leader'],
+        'leader' => ['member', 'attendance_taker', 'assistant'],
+        'district_leader' => ['member', 'attendance_taker', 'assistant', 'leader'],
         // Pastor may appoint a church administrator (one-step promote: pastor → admin).
-        'pastor' => ['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'],
-        'admin' => ['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'],
-        'super_admin' => function_exists('roles') ? roles() : ['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'],
+        'pastor' => ['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'],
+        'admin' => ['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'],
+        'super_admin' => function_exists('roles') ? roles() : ['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'],
         default => [],
     };
 }
@@ -335,17 +336,20 @@ function role_transition_sources(string $editorRole, string $targetRole): array
 {
     if ($editorRole === 'leader') {
         return match ($targetRole) {
-            'member' => ['assistant'],
-            'assistant' => ['member'],
+            'member' => ['attendance_taker', 'assistant'],
+            'attendance_taker' => ['member', 'assistant'],
+            'assistant' => ['member', 'attendance_taker'],
             default => [],
         };
     }
 
     if ($editorRole === 'district_leader') {
         return match ($targetRole) {
-            'member' => ['assistant', 'leader'],
-            'assistant' => ['member', 'leader'],
-            'leader' => ['assistant', 'leader'],
+            // Keep one-step promotions: member cannot jump straight to leader.
+            'member' => ['attendance_taker', 'assistant', 'leader'],
+            'attendance_taker' => ['member', 'assistant', 'leader'],
+            'assistant' => ['member', 'attendance_taker', 'leader'],
+            'leader' => ['attendance_taker', 'assistant', 'leader'],
             default => [],
         };
     }
@@ -434,6 +438,16 @@ function person_group_memberships_ready(): bool
         return $ready;
     }
     $ready = function_exists('db_table_exists') && db_table_exists('person_group_memberships');
+    return $ready;
+}
+
+function home_groups_church_service_ready(): bool
+{
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+    $ready = function_exists('db_column_exists') && db_column_exists('home_groups', 'is_church_service');
     return $ready;
 }
 
@@ -834,6 +848,224 @@ function person_linked_to_user(int $userId): ?array
 }
 
 /**
+ * Ensure a pastoral people row exists for a CRM user (role-invite / leader picker).
+ *
+ * Matches an unlinked card in the same church by email, then by exact full name;
+ * otherwise creates a new card in $preferredGroupId or the first active church group.
+ *
+ * @return array<string, mixed>|null
+ */
+function ensure_pastoral_person_for_user(int $userId, ?int $preferredGroupId = null): ?array
+{
+    if ($userId <= 0) {
+        return null;
+    }
+    $existing = person_linked_to_user($userId);
+    if ($existing) {
+        if ($preferredGroupId !== null && $preferredGroupId > 0) {
+            try {
+                person_add_group_membership((int) $existing['id'], $preferredGroupId, false);
+            } catch (Throwable) {
+                // Keep existing link even if membership add fails.
+            }
+        }
+        return $existing;
+    }
+
+    $account = fetch_one('SELECT id, name, email, church_id, group_id FROM users WHERE id = ? LIMIT 1', [$userId]);
+    if (!$account) {
+        return null;
+    }
+    $churchId = (int) ($account['church_id'] ?? 0);
+    if ($churchId <= 0) {
+        return null;
+    }
+
+    $groupId = $preferredGroupId !== null && $preferredGroupId > 0
+        ? $preferredGroupId
+        : (int) ($account['group_id'] ?? 0);
+    if ($groupId > 0) {
+        $group = fetch_one(
+            'SELECT id FROM home_groups WHERE id = ? AND church_id = ? AND is_active = 1 LIMIT 1',
+            [$groupId, $churchId]
+        );
+        if (!$group) {
+            $groupId = 0;
+        }
+    }
+    if ($groupId <= 0) {
+        try {
+            $fallback = fetch_one(
+                'SELECT id FROM home_groups WHERE church_id = ? AND is_active = 1 ORDER BY is_church_service DESC, name, id LIMIT 1',
+                [$churchId]
+            );
+        } catch (Throwable) {
+            $fallback = null;
+        }
+        if (!$fallback) {
+            $fallback = fetch_one(
+                'SELECT id FROM home_groups WHERE church_id = ? AND is_active = 1 ORDER BY name, id LIMIT 1',
+                [$churchId]
+            );
+        }
+        $groupId = (int) ($fallback['id'] ?? 0);
+    }
+    if ($groupId <= 0) {
+        return null;
+    }
+
+    $email = normalize_account_email((string) ($account['email'] ?? ''));
+    $fullName = trim((string) ($account['name'] ?? ''));
+    if ($fullName === '') {
+        $fullName = 'Участник #' . $userId;
+    }
+
+    $candidate = null;
+    if ($email !== '') {
+        $candidate = fetch_one(
+            'SELECT p.*
+             FROM people p
+             JOIN home_groups g ON g.id = p.group_id
+             WHERE p.deleted_at IS NULL
+               AND p.user_id IS NULL
+               AND g.church_id = ?
+               AND p.email = ?
+             ORDER BY p.id
+             LIMIT 1',
+            [$churchId, $email]
+        );
+    }
+    if (!$candidate && $fullName !== '') {
+        $candidate = fetch_one(
+            'SELECT p.*
+             FROM people p
+             JOIN home_groups g ON g.id = p.group_id
+             WHERE p.deleted_at IS NULL
+               AND p.user_id IS NULL
+               AND g.church_id = ?
+               AND p.full_name = ?
+             ORDER BY p.id
+             LIMIT 1',
+            [$churchId, $fullName]
+        );
+    }
+
+    if ($candidate) {
+        db()->prepare('UPDATE people SET user_id = ?, email = COALESCE(email, ?) WHERE id = ?')
+            ->execute([$userId, $email !== '' ? $email : null, (int) $candidate['id']]);
+        try {
+            person_add_group_membership((int) $candidate['id'], $groupId, (int) ($candidate['group_id'] ?? 0) <= 0);
+        } catch (Throwable) {
+        }
+        return person_linked_to_user($userId);
+    }
+
+    db()->prepare(
+        'INSERT INTO people (user_id, group_id, full_name, email, first_visit_date, training_stage)
+         VALUES (?, ?, ?, ?, CURDATE(), "новичок")'
+    )->execute([$userId, $groupId, $fullName, $email !== '' ? $email : null]);
+    $personId = (int) db()->lastInsertId();
+    try {
+        person_add_group_membership($personId, $groupId, true);
+    } catch (Throwable) {
+    }
+
+    return person_linked_to_user($userId);
+}
+
+/**
+ * Church-scoped people that can be attached to $groupId (not already members).
+ *
+ * @return list<array<string, mixed>>
+ */
+function church_people_attach_candidates(array $user, int $groupId, string $query = '', int $limit = 40): array
+{
+    $group = scoped_group($user, $groupId);
+    if (!$group || !can_edit_group_data($user)) {
+        return [];
+    }
+    $churchId = (int) ($group['church_id'] ?? 0);
+    if ($churchId <= 0) {
+        return [];
+    }
+    $limit = max(1, min(100, $limit));
+    $params = [$churchId];
+    if (person_group_memberships_ready()) {
+        $notInGroupSql = 'NOT (
+            p.group_id = ?
+            OR EXISTS (SELECT 1 FROM person_group_memberships pgm WHERE pgm.person_id = p.id AND pgm.group_id = ?)
+        )';
+        $params[] = $groupId;
+        $params[] = $groupId;
+    } else {
+        $notInGroupSql = 'p.group_id <> ?';
+        $params[] = $groupId;
+    }
+    $searchSql = '';
+    $query = trim($query);
+    if ($query !== '') {
+        $like = people_list_like_pattern($query);
+        $searchSql = ' AND (p.full_name LIKE ? ESCAPE \'\\\\\' OR p.phone LIKE ? ESCAPE \'\\\\\' OR p.email LIKE ? ESCAPE \'\\\\\' OR p.telegram LIKE ? ESCAPE \'\\\\\')';
+        array_push($params, $like, $like, $like, $like);
+    }
+
+    return fetch_all(
+        "SELECT p.id, p.full_name, p.phone, p.email, g.name AS group_name
+         FROM people p
+         JOIN home_groups g ON g.id = p.group_id
+         WHERE p.deleted_at IS NULL
+           AND g.church_id = ?
+           AND p.group_id IS NOT NULL
+           AND $notInGroupSql
+           $searchSql
+         ORDER BY p.full_name, p.id
+         LIMIT $limit",
+        $params
+    );
+}
+
+/**
+ * User IDs that should receive a meeting-report notification for a group.
+ * Prefers the group leader account; falls back to pastors/admins of the church
+ * (needed for «Церковь» Sunday groups without a leader_person_id).
+ *
+ * @return list<int>
+ */
+function meeting_report_notify_user_ids(int $groupId): array
+{
+    if ($groupId <= 0) {
+        return [];
+    }
+    $leader = fetch_one(
+        'SELECT u.id
+         FROM home_groups g
+         JOIN people p ON p.id = g.leader_person_id
+         JOIN users u ON u.id = p.user_id
+         WHERE g.id = ?
+         LIMIT 1',
+        [$groupId]
+    );
+    if ($leader) {
+        return [(int) $leader['id']];
+    }
+
+    $group = fetch_one('SELECT church_id FROM home_groups WHERE id = ? LIMIT 1', [$groupId]);
+    $churchId = (int) ($group['church_id'] ?? 0);
+    if ($churchId <= 0) {
+        return [];
+    }
+    $rows = fetch_all(
+        'SELECT id FROM users
+         WHERE church_id = ?
+           AND role IN ("pastor", "admin", "super_admin")
+         ORDER BY FIELD(role, "pastor", "admin", "super_admin"), id',
+        [$churchId]
+    );
+
+    return array_values(array_map(static fn(array $row): int => (int) $row['id'], $rows));
+}
+
+/**
  * User row with church/group labels for account card UIs.
  */
 function account_display_row(int $userId): ?array
@@ -1209,18 +1441,18 @@ function active_account_invite_for_person(int $personId): ?array
 function role_invite_roles_for_user(array $user): array
 {
     return match ((string) ($user['role'] ?? 'member')) {
-        'leader' => ['assistant'],
-        'district_leader' => ['assistant', 'leader'],
-        'pastor' => ['assistant', 'leader', 'district_leader', 'admin'],
-        'admin' => ['assistant', 'leader', 'district_leader', 'pastor'],
-        'super_admin' => ['assistant', 'leader', 'district_leader', 'pastor', 'admin'],
+        'leader' => ['attendance_taker', 'assistant'],
+        'district_leader' => ['attendance_taker', 'assistant', 'leader'],
+        'pastor' => ['attendance_taker', 'assistant', 'leader', 'district_leader', 'admin'],
+        'admin' => ['attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor'],
+        'super_admin' => ['attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'],
         default => [],
     };
 }
 
 function role_invite_role_requires_group(string $role): bool
 {
-    return in_array($role, ['assistant', 'leader'], true);
+    return in_array($role, ['attendance_taker', 'assistant', 'leader'], true);
 }
 
 function role_invite_can_issue_role(array $issuer, string $role): bool
@@ -1822,6 +2054,14 @@ function role_invite_page(): void
             }
 
             if ($error === null) {
+                try {
+                    ensure_pastoral_person_for_user(
+                        $userId,
+                        $context['group_id'] !== null ? (int) $context['group_id'] : null
+                    );
+                } catch (Throwable) {
+                    // Account is usable even if pastoral card linking fails; approval retries it.
+                }
                 session_regenerate_id(true);
                 $_SESSION['user_id'] = $userId;
                 audit('role_invite_registered', 'user', $userId, [
@@ -3196,6 +3436,10 @@ function handle_account_post(string $path, string $method, array $user): void
                 $location['longitude'],
                 (int) $group['id'],
             ]);
+        if (home_groups_church_service_ready()) {
+            db()->prepare('UPDATE home_groups SET is_church_service = ? WHERE id = ?')
+                ->execute([isset($_POST['is_church_service']) ? 1 : 0, (int) $group['id']]);
+        }
 
         if (can_assign_home_group_leader($user) && array_key_exists('leader_person_id', $_POST)) {
             $leaderPersonId = $_POST['leader_person_id'] !== '' ? (int) $_POST['leader_person_id'] : null;
@@ -3343,6 +3587,10 @@ function handle_account_post(string $path, string $method, array $user): void
             ajax_redirect($roleRequestsPath, 'Не удалось подтвердить заявку');
         }
 
+        try {
+            ensure_pastoral_person_for_user((int) $request['user_id'], $groupId);
+        } catch (Throwable) {
+        }
         notify_role_change(['id' => (int) $request['user_id'], 'email' => (string) $request['user_email']], $role);
         audit('role_invite_approved', 'user', (int) $request['user_id'], ['role' => $role, 'request_id' => (int) $request['id']]);
         ajax_redirect($roleRequestsPath, 'Роль подтверждена: ' . role_label($role));
@@ -3379,7 +3627,7 @@ function handle_account_post(string $path, string $method, array $user): void
             $group = scoped_group($user, (int) $groupId);
             $groupId = $group ? (int) $group['id'] : null;
         }
-        if (in_array($role, ['leader', 'assistant'], true) && !$groupId) {
+        if (in_array($role, ['leader', 'assistant', 'attendance_taker'], true) && !$groupId) {
             $groupId = $target['group_id'];
         }
         $email = normalize_account_email((string) $_POST['email']);
@@ -3425,7 +3673,7 @@ function handle_account_post(string $path, string $method, array $user): void
             $group = scoped_group($user, (int) $groupId);
             $groupId = $group ? (int) $group['id'] : null;
         }
-        if (in_array($role, ['leader', 'assistant'], true) && !$groupId) {
+        if (in_array($role, ['leader', 'assistant', 'attendance_taker'], true) && !$groupId) {
             $groupId = $target['group_id'];
         }
 
