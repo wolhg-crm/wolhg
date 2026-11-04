@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../src/Account.php';
 if (!function_exists('roles')) {
     function roles(): array
     {
-        return ['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'];
+        return ['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'];
     }
 }
 
@@ -20,29 +20,34 @@ if (!function_exists('role_label')) {
 
 return [
     'roles_assignable_by follows leadership ladder' => function (TestCase $test): void {
-        $test->assertSame(['member', 'assistant'], roles_assignable_by('leader'));
-        $test->assertSame(['member', 'assistant', 'leader'], roles_assignable_by('district_leader'));
-        $test->assertSame(['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'], roles_assignable_by('pastor'));
-        $test->assertSame(['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'], roles_assignable_by('admin'));
-        $test->assertSame(['member', 'assistant', 'leader', 'district_leader', 'pastor', 'admin', 'super_admin'], roles_assignable_by('super_admin'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant'], roles_assignable_by('leader'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant', 'leader'], roles_assignable_by('district_leader'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'], roles_assignable_by('pastor'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'], roles_assignable_by('admin'));
+        $test->assertTrue(in_array('attendance_taker', roles_assignable_by('super_admin'), true));
+        $test->assertTrue(in_array('super_admin', roles_assignable_by('super_admin'), true));
         $test->assertSame([], roles_assignable_by('member'));
         $test->assertSame([], roles_assignable_by('assistant'));
     },
 
-    'leader can only swap member and assistant' => function (TestCase $test): void {
+    'leader can swap member, attendance_taker and assistant' => function (TestCase $test): void {
         $test->assertTrue(can_transition_role('leader', 'member', 'assistant'));
+        $test->assertTrue(can_transition_role('leader', 'member', 'attendance_taker'));
+        $test->assertTrue(can_transition_role('leader', 'attendance_taker', 'member'));
         $test->assertTrue(can_transition_role('leader', 'assistant', 'member'));
         $test->assertTrue(can_transition_role('leader', 'member', 'member'));
         $test->assertFalse(can_transition_role('leader', 'member', 'leader'));
         $test->assertFalse(can_transition_role('leader', 'assistant', 'leader'));
-        $test->assertSame(['member', 'assistant'], assignable_roles(['role' => 'leader'], 'member'));
-        $test->assertSame(['member', 'assistant'], assignable_roles(['role' => 'leader'], 'assistant'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant'], assignable_roles(['role' => 'leader'], 'member'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant'], assignable_roles(['role' => 'leader'], 'assistant'));
     },
 
     'regional leader transition matrix matches product rules' => function (TestCase $test): void {
-        $test->assertSame(['assistant', 'leader'], role_transition_sources('district_leader', 'member'));
-        $test->assertSame(['member', 'leader'], role_transition_sources('district_leader', 'assistant'));
-        $test->assertSame(['assistant', 'leader'], role_transition_sources('district_leader', 'leader'));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader'], role_transition_sources('district_leader', 'member'));
+        $test->assertSame(['member', 'assistant', 'leader'], role_transition_sources('district_leader', 'attendance_taker'));
+        $test->assertSame(['member', 'attendance_taker', 'leader'], role_transition_sources('district_leader', 'assistant'));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader'], role_transition_sources('district_leader', 'leader'));
+        $test->assertTrue(can_transition_role('district_leader', 'attendance_taker', 'attendance_taker'));
 
         $test->assertTrue(can_transition_role('district_leader', 'assistant', 'member'));
         $test->assertTrue(can_transition_role('district_leader', 'leader', 'member'));
@@ -50,12 +55,13 @@ return [
         $test->assertTrue(can_transition_role('district_leader', 'leader', 'assistant'));
         $test->assertTrue(can_transition_role('district_leader', 'assistant', 'leader'));
         $test->assertTrue(can_transition_role('district_leader', 'leader', 'leader'));
+        $test->assertTrue(can_transition_role('district_leader', 'member', 'attendance_taker'));
         $test->assertFalse(can_transition_role('district_leader', 'member', 'leader'));
         $test->assertFalse(can_transition_role('district_leader', 'leader', 'district_leader'));
 
-        $test->assertSame(['member', 'assistant'], assignable_roles(['role' => 'district_leader'], 'member'));
-        $test->assertSame(['member', 'assistant', 'leader'], assignable_roles(['role' => 'district_leader'], 'assistant'));
-        $test->assertSame(['member', 'assistant', 'leader'], assignable_roles(['role' => 'district_leader'], 'leader'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant'], assignable_roles(['role' => 'district_leader'], 'member'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant', 'leader'], assignable_roles(['role' => 'district_leader'], 'assistant'));
+        $test->assertSame(['member', 'attendance_taker', 'assistant', 'leader'], assignable_roles(['role' => 'district_leader'], 'leader'));
     },
 
     'pastor can assign admin with one-step promotion from pastor' => function (TestCase $test): void {

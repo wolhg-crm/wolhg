@@ -17,8 +17,9 @@ return [
         $test->assertStringContains("render_filter_multiselect('group_types', 'Тип'", $index);
         $settingsPos = strpos($index, '<h2>Настройки группы</h2>');
         $test->assertTrue($settingsPos !== false);
-        $settingsBlock = substr($index, $settingsPos, 1200);
+        $settingsBlock = substr($index, $settingsPos, 2200);
         $test->assertStringContains("render_filter_multiselect('group_types', 'Тип'", $settingsBlock);
+        $test->assertStringContains('is_church_service', $settingsBlock);
         $test->assertStringNotContains('<label>Тип<select name="group_types[]" multiple', $settingsBlock);
         $test->assertStringNotContains('<label>Район<input name="district"', $settingsBlock);
     },

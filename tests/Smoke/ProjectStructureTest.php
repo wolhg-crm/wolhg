@@ -93,7 +93,7 @@ return [
         $test->assertStringContains('CREATE TABLE role_invitation_requests', $schema);
         $test->assertFileExists(__DIR__ . '/../../database/migrations/016_role_invitation_requests.sql');
         $test->assertFileExists(__DIR__ . '/../../database/migrations/040_role_invite_admin.sql');
-        $test->assertStringContains("ENUM('assistant','leader','district_leader','pastor','admin')", $schema);
+        $test->assertStringContains("ENUM('attendance_taker','assistant','leader','district_leader','pastor','admin')", $schema);
         $test->assertStringContains("'admin'", file_get_contents(__DIR__ . '/../../database/migrations/040_role_invite_admin.sql'));
     },
     'task lifecycle uniqueness ignores cancelled rows and blocks reopened completed tasks' => function (TestCase $test): void {

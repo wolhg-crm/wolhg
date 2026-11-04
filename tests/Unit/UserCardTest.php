@@ -142,11 +142,11 @@ return [
         $super = ['id' => 6, 'role' => 'super_admin', 'church_id' => 1, 'group_id' => null];
 
         $test->assertSame([], role_invite_roles_for_user($member));
-        $test->assertSame(['assistant'], role_invite_roles_for_user($leader));
-        $test->assertSame(['assistant', 'leader'], role_invite_roles_for_user($regional));
-        $test->assertSame(['assistant', 'leader', 'district_leader', 'admin'], role_invite_roles_for_user($pastor));
-        $test->assertSame(['assistant', 'leader', 'district_leader', 'pastor'], role_invite_roles_for_user($admin));
-        $test->assertSame(['assistant', 'leader', 'district_leader', 'pastor', 'admin'], role_invite_roles_for_user($super));
+        $test->assertSame(['attendance_taker', 'assistant'], role_invite_roles_for_user($leader));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader'], role_invite_roles_for_user($regional));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader', 'district_leader', 'admin'], role_invite_roles_for_user($pastor));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor'], role_invite_roles_for_user($admin));
+        $test->assertSame(['attendance_taker', 'assistant', 'leader', 'district_leader', 'pastor', 'admin'], role_invite_roles_for_user($super));
         $test->assertTrue(role_invite_role_requires_group('leader'));
         $test->assertFalse(role_invite_role_requires_group('district_leader'));
         $test->assertFalse(role_invite_role_requires_group('admin'));
