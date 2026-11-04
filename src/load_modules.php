@@ -115,6 +115,8 @@ function application_modules(): array
         'Care.php' => [
             'care_people',
             'care_inactive_people',
+            'open_leader_tasks_for_user',
+            'open_leader_tasks_count_for_user',
             'group_health_stats',
             'church_analytics_stats',
             'meeting_create_for_user',

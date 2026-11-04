@@ -241,8 +241,9 @@ return [
         }
 
         $test->assertSame('Был на этой неделе', $byLevel['green']);
-        $test->assertSame('Не был 2 недели', $byLevel['yellow']);
-        $test->assertSame('Не был месяц', $byLevel['orange']);
+        $test->assertSame('Не был 1 неделю', $byLevel['yellow']);
+        $test->assertTrue(str_contains($byLevel['orange'], 'Не был 2–3 недели'));
+        $test->assertTrue(str_contains($byLevel['orange'], 'Не был месяц'));
         $test->assertSame('Не был больше 6 недель', $byLevel['red']);
 
         [$green] = ChurchCare\care_status('2026-07-08', '2026-07-10', '2026-07-15');
@@ -282,7 +283,7 @@ return [
         $test->assertStringContains('Задачи лидера', $html);
         $test->assertStringContains('Радар заботы и цветные точки', $html);
         $test->assertStringContains('Был на этой неделе', $html);
-        $test->assertStringContains('Не был 2 недели', $html);
+        $test->assertStringContains('Не был 1 неделю', $html);
         $test->assertStringContains('Позвонить новичку', $html);
         $test->assertStringContains('выпадает из общения', $html);
         $test->assertStringContains('id="article-process-care-radar"', $html);

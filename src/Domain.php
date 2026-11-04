@@ -62,10 +62,14 @@ function care_status(?string $lastAttendance, ?string $lastContact, string $toda
     $attendanceDays = $lastAttendance ? $current->diff(new DateTimeImmutable($lastAttendance))->days : 999;
     $contactDays = $lastContact ? $current->diff(new DateTimeImmutable($lastContact))->days : 999;
 
+    // Bands are exclusive upper bounds on days since last attendance/first visit.
+    // 8–14 days = one missed weekly meeting ("1 неделю"), not two.
     if ($attendanceDays <= 7) {
         $level = ['green', 'Был на этой неделе'];
     } elseif ($attendanceDays <= 14) {
-        $level = ['yellow', 'Не был 2 недели'];
+        $level = ['yellow', 'Не был 1 неделю'];
+    } elseif ($attendanceDays <= 28) {
+        $level = ['orange', 'Не был 2–3 недели'];
     } elseif ($attendanceDays <= 42) {
         $level = ['orange', 'Не был месяц'];
     } else {
@@ -77,6 +81,31 @@ function care_status(?string $lastAttendance, ?string $lastContact, string $toda
     }
 
     return [$level[0], $level[1], $attendanceDays, $contactDays];
+}
+
+/**
+ * Whether a meeting belongs in group_health_stats attendance math.
+ *
+ * Future meetings (pre-created for «Встречи этой недели») and meetings with no
+ * attendance rows yet must not dilute average_attendance.
+ */
+function meeting_counts_toward_group_health(
+    string $meetingDate,
+    bool $hasAttendanceMarks,
+    string $today = 'today'
+): bool {
+    if (!$hasAttendanceMarks) {
+        return false;
+    }
+    try {
+        $current = new DateTimeImmutable($today);
+        $date = new DateTimeImmutable($meetingDate);
+    } catch (\Exception) {
+        return false;
+    }
+    $windowStart = $current->modify('-90 days');
+
+    return $date >= $windowStart && $date <= $current;
 }
 
 function accessible_group_filter(array $user, string $alias = 'g'): array

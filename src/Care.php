@@ -8,6 +8,70 @@ declare(strict_types=1);
  */
 
 /**
+ * Open pastoral tasks assigned to $user, newest due first, capped for the dashboard list.
+ *
+ * @return list<array<string, mixed>>
+ */
+function open_leader_tasks_for_user(array $user, int $limit = 8): array
+{
+    $limit = max(1, min(100, $limit));
+    $churchId = function_exists('effective_scope_church_id') ? effective_scope_church_id($user) : null;
+    if ($churchId !== null && $churchId > 0) {
+        return fetch_all(
+            'SELECT t.*, p.full_name
+             FROM tasks t
+             LEFT JOIN people p ON p.id = t.person_id
+             LEFT JOIN home_groups g_task ON g_task.id = t.group_id
+             LEFT JOIN home_groups g_person ON g_person.id = p.group_id
+             WHERE t.assigned_to = ?
+               AND t.status = "open"
+               AND COALESCE(g_task.church_id, g_person.church_id) = ?
+             ORDER BY t.due_date, t.id
+             LIMIT ' . $limit,
+            [(int) $user['id'], (int) $churchId]
+        );
+    }
+
+    return fetch_all(
+        'SELECT t.*, p.full_name
+         FROM tasks t
+         LEFT JOIN people p ON p.id = t.person_id
+         WHERE t.assigned_to = ? AND t.status = "open"
+         ORDER BY t.due_date, t.id
+         LIMIT ' . $limit,
+        [(int) $user['id']]
+    );
+}
+
+/**
+ * Total open tasks for the dashboard badge (not capped by the preview LIMIT).
+ */
+function open_leader_tasks_count_for_user(array $user): int
+{
+    $churchId = function_exists('effective_scope_church_id') ? effective_scope_church_id($user) : null;
+    if ($churchId !== null && $churchId > 0) {
+        $row = fetch_one(
+            'SELECT COUNT(*) AS c
+             FROM tasks t
+             LEFT JOIN people p ON p.id = t.person_id
+             LEFT JOIN home_groups g_task ON g_task.id = t.group_id
+             LEFT JOIN home_groups g_person ON g_person.id = p.group_id
+             WHERE t.assigned_to = ?
+               AND t.status = "open"
+               AND COALESCE(g_task.church_id, g_person.church_id) = ?',
+            [(int) $user['id'], (int) $churchId]
+        );
+    } else {
+        $row = fetch_one(
+            'SELECT COUNT(*) AS c FROM tasks t WHERE t.assigned_to = ? AND t.status = "open"',
+            [(int) $user['id']]
+        );
+    }
+
+    return (int) ($row['c'] ?? 0);
+}
+
+/**
  * People visible to $user with care_status enrichment.
  *
  * @return list<array<string, mixed>>
@@ -125,8 +189,19 @@ function group_health_stats(array $user, ?int $groupId = null): array
             (SELECT COUNT(*) FROM people p WHERE p.group_id = g.id AND p.deleted_at IS NULL AND p.is_potential_leader = 1) AS future_leaders,
             (SELECT COUNT(*) FROM prayer_requests pr WHERE pr.group_id = g.id) AS prayer_count,
             (SELECT COUNT(*) FROM prayer_requests pr WHERE pr.group_id = g.id AND pr.status IN ('testimony','closed')) AS closed_prayers,
-            (SELECT COUNT(*) FROM meetings m WHERE m.group_id = g.id AND m.meeting_date >= CURDATE() - INTERVAL 90 DAY) AS meetings_count,
-            (SELECT COUNT(*) FROM attendance a JOIN meetings m ON m.id = a.meeting_id WHERE m.group_id = g.id AND m.meeting_date >= CURDATE() - INTERVAL 90 DAY AND a.status IN ('present','new')) AS attendance_marks
+            (SELECT COUNT(*) FROM meetings m
+                WHERE m.group_id = g.id
+                  AND m.meeting_date >= CURDATE() - INTERVAL 90 DAY
+                  AND m.meeting_date <= CURDATE()
+                  AND EXISTS (SELECT 1 FROM attendance a WHERE a.meeting_id = m.id)
+            ) AS meetings_count,
+            (SELECT COUNT(*) FROM attendance a
+                JOIN meetings m ON m.id = a.meeting_id
+                WHERE m.group_id = g.id
+                  AND m.meeting_date >= CURDATE() - INTERVAL 90 DAY
+                  AND m.meeting_date <= CURDATE()
+                  AND a.status IN ('present','new')
+            ) AS attendance_marks
         FROM home_groups g
         WHERE $groupSql AND g.is_active = 1 $extra
         ORDER BY g.name", $params);
@@ -188,7 +263,7 @@ function church_analytics_stats(array $user): array
  */
 function meeting_create_for_user(array $user, int $groupId, string $meetingDate, string $topic = ''): array
 {
-    if (!can_edit_group_data($user)) {
+    if (!can_mark_attendance($user)) {
         throw new RuntimeException('Недостаточно прав для создания встречи');
     }
     $group = scoped_group($user, $groupId);
@@ -227,7 +302,7 @@ function meeting_save_attendance_for_user(
     bool $pastorHelpNeeded = false,
     string $notes = ''
 ): array {
-    if (!can_edit_group_data($user)) {
+    if (!can_mark_attendance($user)) {
         throw new RuntimeException('Недостаточно прав для отметки посещаемости');
     }
     $meeting = scoped_meeting($user, $meetingId);

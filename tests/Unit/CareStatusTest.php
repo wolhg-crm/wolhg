@@ -7,6 +7,7 @@ use function ChurchCare\care_status;
 use function ChurchCare\effective_last_attendance;
 use function ChurchCare\effective_last_contact;
 use function ChurchCare\latest_care_date;
+use function ChurchCare\meeting_counts_toward_group_health;
 use function ChurchCare\needs_radar_notification;
 
 return [
@@ -18,11 +19,26 @@ return [
         $test->assertSame(7, $attendanceDays);
         $test->assertSame(5, $contactDays);
     },
-    'care status escalates two week absence to yellow' => function (TestCase $test): void {
+    'TC-Tulyakov: day 8 after last visit is 1 week yellow, not 2 weeks' => function (TestCase $test): void {
+        // Last present 18 Oct, missed meeting 25 Oct → on 26 Oct (8 days) must say 1 week.
+        [$level, $label, $days] = care_status('2026-10-18', '2026-10-18', '2026-10-26');
+
+        $test->assertSame(8, $days);
+        $test->assertSame('yellow', $level);
+        $test->assertSame('Не был 1 неделю', $label);
+    },
+    'care status escalates 8–14 day absence to one-week yellow' => function (TestCase $test): void {
         [$level, $label] = care_status('2026-07-01', '2026-07-10', '2026-07-15');
 
         $test->assertSame('yellow', $level);
-        $test->assertSame('Не был 2 недели', $label);
+        $test->assertSame('Не был 1 неделю', $label);
+    },
+    'care status escalates 15–28 day absence to 2–3 weeks orange' => function (TestCase $test): void {
+        [$level, $label, $days] = care_status('2026-10-01', '2026-10-01', '2026-10-16');
+
+        $test->assertSame(15, $days);
+        $test->assertSame('orange', $level);
+        $test->assertSame('Не был 2–3 недели', $label);
     },
     'care status escalates month absence to orange' => function (TestCase $test): void {
         [$level, $label] = care_status('2026-06-10', '2026-07-10', '2026-07-15');
@@ -88,17 +104,31 @@ return [
         [$level] = care_status($last, effective_last_contact(null, '2026-10-12'), '2026-10-19');
         $test->assertSame('green', $level);
     },
-    'TC3: first visit 8 days ago is yellow' => function (TestCase $test): void {
+    'TC3: first visit 8 days ago is yellow one-week band' => function (TestCase $test): void {
         $last = effective_last_attendance(null, '2026-10-11');
         [$level, $label] = care_status($last, effective_last_contact(null, '2026-10-11'), '2026-10-19');
         $test->assertSame('yellow', $level);
-        $test->assertSame('Не был 2 недели', $label);
+        $test->assertSame('Не был 1 неделю', $label);
     },
-    'TC4: first visit 15 days ago is orange month band' => function (TestCase $test): void {
+    'TC4: first visit 15 days ago is orange 2–3 weeks band' => function (TestCase $test): void {
         $last = effective_last_attendance(null, '2026-10-04');
         [$level, $label] = care_status($last, effective_last_contact(null, '2026-10-04'), '2026-10-19');
         $test->assertSame('orange', $level);
+        $test->assertSame('Не был 2–3 недели', $label);
+    },
+    'TC4b: first visit 29 days ago is orange month band' => function (TestCase $test): void {
+        $last = effective_last_attendance(null, '2026-09-20');
+        [$level, $label, $days] = care_status($last, effective_last_contact(null, '2026-09-20'), '2026-10-19');
+        $test->assertSame(29, $days);
+        $test->assertSame('orange', $level);
         $test->assertSame('Не был месяц', $label);
+    },
+    'group health ignores future and unmarked meetings' => function (TestCase $test): void {
+        $test->assertTrue(meeting_counts_toward_group_health('2026-10-20', true, '2026-10-26'));
+        $test->assertTrue(meeting_counts_toward_group_health('2026-10-26', true, '2026-10-26'));
+        $test->assertFalse(meeting_counts_toward_group_health('2026-10-27', true, '2026-10-26'));
+        $test->assertFalse(meeting_counts_toward_group_health('2026-10-20', false, '2026-10-26'));
+        $test->assertFalse(meeting_counts_toward_group_health('2026-07-01', true, '2026-10-26'));
     },
     'TC5: first visit 43 days ago is red and needs radar' => function (TestCase $test): void {
         $last = effective_last_attendance(null, '2026-09-06');
